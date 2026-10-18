@@ -1,0 +1,177 @@
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+import tempfile
+import unittest
+from common import ROOT, engine, model
+
+BASH = shutil.which('bash')
+
+
+class Transactions(unittest.TestCase):
+    def setUp(self):
+        self.td=tempfile.TemporaryDirectory(); self.p=pathlib.Path(self.td.name)
+        for f in ['systemctl','ss']: (ROOT/'tests/mocks'/f).chmod(0o755)
+        (self.p/'service.json').write_text(json.dumps({'active':True,'enabled':True}))
+        m=model(); m['nodes']=[m['nodes'][7]]; m['nodes'][0]['port']=18388
+        (self.p/'config').mkdir(); engine.save(self.p/'config/manager.json',m)
+        engine.save(self.p/'config/config.json',engine.compile_config(m))
+        self.old=(self.p/'config/manager.json').read_bytes()
+        for name,ver in [('old','1.14.2'),('candidate','1.14.3')]:
+            b=self.p/('runtime/releases/old/sing-box' if name=='old' else name)
+            b.parent.mkdir(parents=True,exist_ok=True)
+            b.write_text('#!/bin/sh\ncase "$1" in version) echo "sing-box version '+ver+'";; check) exit 0;; esac\n')
+            b.chmod(0o755)
+        (self.p/'runtime/current').symlink_to(self.p/'runtime/releases/old',target_is_directory=True)
+        (self.p/'exports').mkdir(); (self.p/'state/exports').mkdir(parents=True)
+        (self.p/'state/exports/old.txt').write_text('old export')
+        (self.p/'systemd').mkdir()
+        (self.p/'systemd/90-singbox-manager.conf').write_text('# Managed by singbox-manager.sh\nExecStart='+str(self.p/'runtime/current/sing-box')+' run\n')
+
+    def tearDown(self): self.td.cleanup()
+
+    def run_bash(self, script, expected=0):
+        env=dict(os.environ,PROJECT=str(ROOT),TEST_ROOT=str(self.p),PYTHONDONTWRITEBYTECODE='1')
+        r=subprocess.run([BASH,'-c','source "$PROJECT/tests/transaction_harness.sh"\n'+script],env=env,
+                         input='yes\n'*10,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        self.assertEqual(r.returncode,expected,r.stdout)
+        return r.stdout
+
+    def prepare(self):
+        return '''cp "$CONF/manager.json" "$TMP/model.json"
+python3 - "$TMP/model.json" <<'PY'
+import json,sys
+p=sys.argv[1];m=json.load(open(p));m['nodes'][0]['name']='new node';json.dump(m,open(p,'w'))
+PY
+'''
+
+    def assertRestored(self):
+        self.assertEqual((self.p/'config/manager.json').read_bytes(),self.old)
+        self.assertIn('1.14.2',subprocess.check_output([str(self.p/'runtime/current/sing-box'),'version'],text=True))
+        self.assertEqual(json.loads((self.p/'service.json').read_text()),{'active':True,'enabled':True})
+        self.assertTrue((self.p/'state/exports/old.txt').exists())
+
+    def test_successful_upgrade(self):
+        self.run_bash(self.prepare()+'apply_draft "$TEST_ROOT/candidate"\n')
+        self.assertEqual(engine.load(self.p/'config/manager.json')['nodes'][0]['name'],'new node')
+        self.assertIn('1.14.3',subprocess.check_output([str(self.p/'runtime/current/sing-box'),'version'],text=True))
+        self.assertFalse((self.p/'state/pending').exists()); self.assertFalse((self.p/'state/draft.json').exists())
+
+    def test_restart_failure_rolls_back(self):
+        self.run_bash(self.prepare()+'touch "$TEST_ROOT/fail-restart"\napply_draft "$TEST_ROOT/candidate"',1)
+        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists())
+
+    def test_unhealthy_upgrade_rolls_back(self):
+        self.run_bash(self.prepare()+'touch "$TEST_ROOT/fail-health"\napply_draft "$TEST_ROOT/candidate"',1)
+        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists())
+
+    def test_failed_rollback_retains_pending_and_recovers_next_run(self):
+        self.run_bash(self.prepare()+'touch "$TEST_ROOT/fail-all-restarts"\napply_draft "$TEST_ROOT/candidate"',1)
+        self.assertTrue((self.p/'state/pending').exists())
+        (self.p/'fail-all-restarts').unlink()
+        self.run_bash('recover_pending')
+        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists())
+
+    def test_pending_recovery_rejects_corrupt_backup_before_stop(self):
+        self.run_bash('begin_transaction\nTX=""')
+        backup=pathlib.Path((self.p/'state/pending').read_text().strip())
+        (backup/'runtime.bin').write_text('tampered')
+        before=(self.p/'service.log').read_text()
+        self.run_bash('recover_pending',1)
+        self.assertEqual((self.p/'service.log').read_text(),before)
+        self.assertTrue((self.p/'state/pending').exists())
+
+    def test_stopped_service_remains_stopped(self):
+        (self.p/'service.json').write_text(json.dumps({'active':False,'enabled':False}))
+        self.run_bash(self.prepare()+'apply_draft "$TEST_ROOT/candidate"')
+        self.assertEqual(json.loads((self.p/'service.json').read_text()),{'active':False,'enabled':False})
+
+    def test_cancellation_keeps_draft_and_original_service(self):
+        self.run_bash(self.prepare()+'confirm() { return 1; }\napply_draft "$TEST_ROOT/candidate"')
+        self.assertRestored(); self.assertTrue((self.p/'state/draft.json').exists())
+        self.assertFalse((self.p/'state/pending').exists())
+
+    def test_outside_edit_during_confirmation_is_not_overwritten(self):
+        self.run_bash(self.prepare()+'''confirm() { echo '{"external":true}' >"$CONF/config.json"; return 0; }
+apply_draft "$TEST_ROOT/candidate"''',1)
+        self.assertEqual(engine.load(self.p/'config/config.json'),{'external':True})
+        self.assertNotIn('stop sing-box',(self.p/'service.log').read_text() if (self.p/'service.log').exists() else '')
+
+    def test_signal_rolls_back(self):
+        self.run_bash('begin_transaction\nsystemctl stop sing-box\nkill -TERM $$',143)
+        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists())
+
+    def test_kill9_recovery(self):
+        self.run_bash('begin_transaction\nsystemctl stop sing-box\nkill -KILL $$',-9)
+        self.assertTrue((self.p/'state/pending').exists())
+        self.run_bash('recover_pending')
+        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists())
+
+    def test_manual_restart_failure_rolls_back(self):
+        self.run_bash('touch "$TEST_ROOT/fail-restart"\nservice_action restart',1)
+        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists())
+
+    def test_manual_start_failure_preserves_stopped_state(self):
+        (self.p/'service.json').write_text(json.dumps({'active':False,'enabled':False}))
+        self.run_bash('touch "$TEST_ROOT/fail-health"\nservice_action start',1)
+        self.assertEqual(json.loads((self.p/'service.json').read_text()),{'active':False,'enabled':False})
+        self.assertFalse((self.p/'state/pending').exists())
+
+    def test_runtime_library_restored_after_failed_upgrade(self):
+        (self.p/'runtime/releases/old/libcronet.so').write_bytes(b'original library')
+        (self.p/'libcronet.so').write_bytes(b'candidate library')
+        self.run_bash(self.prepare()+'touch "$TEST_ROOT/fail-restart"\napply_draft "$TEST_ROOT/candidate"',1)
+        self.assertRestored()
+        self.assertEqual((self.p/'runtime/current/libcronet.so').read_bytes(),b'original library')
+
+    def test_incompatible_runtime_does_not_stop_service(self):
+        candidate=self.p/'candidate';candidate.write_text(candidate.read_text().replace('1.14.3','1.13.12'))
+        self.run_bash(self.prepare()+'apply_draft "$TEST_ROOT/candidate"',1)
+        self.assertRestored()
+        self.assertNotIn('stop sing-box',(self.p/'service.log').read_text() if (self.p/'service.log').exists() else '')
+
+    def test_audit_chain_contains_recovery_without_credentials(self):
+        self.run_bash(self.prepare()+'touch "$TEST_ROOT/fail-restart"\napply_draft "$TEST_ROOT/candidate"',1)
+        from sbm.core import audit
+        self.assertTrue(audit.verify(self.p/'state/audit.jsonl')['valid'])
+        rows=[json.loads(line) for line in (self.p/'state/audit.jsonl').read_text().splitlines()]
+        self.assertIn('rollback',[row['event'] for row in rows])
+        self.assertNotIn('secret',(self.p/'state/audit.jsonl').read_text())
+
+    def test_draft_discard_does_not_change_live_nodes_runtime_or_service(self):
+        self.run_bash('engine draft-save "$CONF/manager.json" "$STATE/draft.json" "$CONF" preserve\ndraft_discard_action')
+        self.assertRestored();self.assertFalse((self.p/'state/draft.json').exists())
+        self.assertEqual(len(list((self.p/'state/discarded-drafts').glob('*.json'))),1)
+        self.assertFalse((self.p/'service.log').exists())
+
+    def test_cancel_draft_discard_keeps_draft(self):
+        self.run_bash('engine draft-save "$CONF/manager.json" "$STATE/draft.json" "$CONF" preserve\nconfirm() { return 1; }\ndraft_discard_action')
+        self.assertRestored();self.assertTrue((self.p/'state/draft.json').exists())
+        self.assertFalse((self.p/'state/discarded-drafts').exists())
+
+    def test_protocol_definitions_are_restored_with_snapshot(self):
+        folder=self.p/'state/protocols';folder.mkdir();(folder/'original.json').write_text('original data')
+        self.run_bash('begin_transaction\nprintf "changed" >"$STATE/protocols/original.json"\nprintf "added" >"$STATE/protocols/new.json"\nexit 1',1)
+        self.assertEqual((folder/'original.json').read_text(),'original data')
+        self.assertFalse((folder/'new.json').exists())
+
+    def test_permanent_draft_purge_does_not_change_live_service(self):
+        self.run_bash('engine draft-save "$CONF/manager.json" "$STATE/draft.json" "$CONF" preserve\npermanent_delete_confirm(){ return 0; }\ndraft_purge_action')
+        self.assertFalse((self.p/'state/draft.json').exists())
+        self.assertFalse((self.p/'state/discarded-drafts').exists())
+        self.assertRestored();self.assertFalse((self.p/'service.log').exists())
+
+    def test_cancel_permanent_draft_purge_keeps_original(self):
+        self.run_bash('engine draft-save "$CONF/manager.json" "$STATE/draft.json" "$CONF" preserve\npermanent_delete_confirm(){ return 1; }\ndraft_purge_action')
+        self.assertTrue((self.p/'state/draft.json').exists());self.assertRestored()
+
+    def test_clear_archives_when_current_draft_absent(self):
+        self.run_bash('engine draft-save "$CONF/manager.json" "$STATE/draft.json" "$CONF" preserve\ndraft_discard_action\npermanent_delete_confirm(){ return 0; }\ndraft_archives_purge_action')
+        self.assertFalse((self.p/'state/draft.json').exists())
+        self.assertEqual(list((self.p/'state/discarded-drafts').iterdir()),[])
+        self.assertRestored()
+
+
+if __name__=='__main__': unittest.main()

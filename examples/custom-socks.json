@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "kind": "custom-socks-demo",
+  "label": "自定义模块演示：SOCKS5（仅用于回环测试）",
+  "module_version": "1.0.0",
+  "minimum_runtime": "1.14.0",
+  "default_port": 17443,
+  "networks": ["tcp"],
+  "tls": false,
+  "server_tags": [],
+  "fields": [
+    {"key": "login", "label": "用户名", "type": "string", "default": "module-user"},
+    {"key": "password", "label": "认证密码", "type": "password"}
+  ],
+  "server_template": {
+    "type": "socks",
+    "users": [{"username": "${login}", "password": "${password}"}]
+  },
+  "client_template": {
+    "type": "socks",
+    "version": "5",
+    "username": "${login}",
+    "password": "${password}"
+  },
+  "uri_template": "socks5://${login}:${password}@${server}:${port}#${name}"
+}

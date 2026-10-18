@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+import json, os, pathlib, sys
+m=json.loads(pathlib.Path(os.environ['MOCK_STATE']).read_text())
+if not m['active']: sys.exit(0)
+port=18388
+if any('sport' in arg for arg in sys.argv) and not any(str(port) in arg for arg in sys.argv): sys.exit(0)
+nets=['tcp','udp'] if '-lntup' in sys.argv else (['udp'] if '-lnup' in sys.argv else ['tcp'])
+for net in nets:
+    print(f'{net} LISTEN 0 4096 0.0.0.0:{port} 0.0.0.0:* users:(("sing-box",pid=12345,fd=7))')

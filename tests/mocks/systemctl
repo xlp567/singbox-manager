@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+import json, os, pathlib, sys
+p=pathlib.Path(os.environ['MOCK_STATE'])
+m=json.loads(p.read_text())
+cmd=sys.argv[1]
+with open(os.environ['MOCK_LOG'],'a') as f: f.write(' '.join(sys.argv[1:])+'\n')
+if cmd=='is-active': sys.exit(0 if m['active'] else 3)
+if cmd=='is-enabled': sys.exit(0 if m['enabled'] else 1)
+if cmd=='show': print('12345' if m['active'] else '0'); sys.exit(0)
+if cmd=='daemon-reload': sys.exit(0)
+if cmd in {'restart','start'}:
+    flag=p.parent/'fail-restart'
+    if flag.exists(): flag.unlink(); sys.exit(1)
+    if (p.parent/'fail-all-restarts').exists(): sys.exit(1)
+    m['active']=True
+elif cmd=='stop': m['active']=False
+elif cmd=='enable': m['enabled']=True
+elif cmd=='disable': m['enabled']=False
+else: raise RuntimeError('unexpected systemctl command '+cmd)
+p.write_text(json.dumps(m))

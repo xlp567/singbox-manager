@@ -1,0 +1,14 @@
+.cache/
+__pycache__/
+*.pyc
+*.DS_Store
+
+# Private server state and credentials
+manager.json
+config.json
+draft.json
+github-token
+update-source.json
+*.pem
+*.key
+.env
