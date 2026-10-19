@@ -62,7 +62,7 @@ Use menu **9** to export client information. Exports, QR codes, drafts and backu
 - [Architecture](架构与扩展.md) · [Custom protocols](自定义协议模块.md) · [File locations](文件目录速查.md)
 - [Contributing](CONTRIBUTING.md) · [License](LICENSE)
 
-## Why is Base64 embedded in the script?
+## Embedded Python engine (Base64)
 
 The long text following `base64 -d <<'SBM_BUNDLE'` inside `emit_engine()` in `singbox-manager.sh` is **a ZIP archive of the repository's Python management engine, encoded as Base64**. Base64 is reversible encoding and provides no encryption. Readable source is available in [src/sbm/](src/sbm/). This engine handles protocol adaptation, configuration compilation, validation and manager updates; the separately installed official sing-box runtime handles proxy traffic.
 

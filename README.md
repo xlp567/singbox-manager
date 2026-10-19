@@ -63,7 +63,7 @@ sbm self-update github    # 更新管理器
 - [自定义协议](自定义协议模块.md) · [更新记录](CHANGELOG.md) · [实际验证记录](测试与部署结果.md)
 - [参与贡献](CONTRIBUTING.md) · [许可证](LICENSE)
 
-## 为什么脚本里有一大段 Base64？
+## 内嵌 Python 引擎（Base64）
 
 `singbox-manager.sh` 的 `emit_engine()` 函数中，`base64 -d <<'SBM_BUNDLE'` 后面的长文本，是**仓库 Python 管理引擎源码的 ZIP 压缩包经过 Base64 编码后的内容**。Base64 可以还原，不提供加密保护；可读源码位于 [src/sbm/](src/sbm/)。它负责协议适配、配置编译、验证和升级等管理工作，实际代理流量由单独安装的官方 sing-box 程序处理。
 
