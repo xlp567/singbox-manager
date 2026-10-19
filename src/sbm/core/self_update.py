@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from .storage import save,sync_directory,file_digest
-from .release_trust import static_script_info,download_release,verify_directory,asset_bytes
+from .release_trust import static_script_info,download_release,verify_directory,asset_bytes,bounded_read
 
 DEFAULT_REPOSITORY='xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -134,11 +134,12 @@ class GitHubReadError(ValueError):
 
 def request_json(url,token=''):
     if not url.startswith('https://api.github.com/repos/'):raise ValueError('只允许 GitHub 官方仓库 API')
-    headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager','X-GitHub-Api-Version':'2022-11-28'}
+    headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
+    url+=('&' if '?' in url else '?')+'sbm='+uuid.uuid4().hex
     if token:headers['Authorization']='Bearer '+token
     try:
         with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(url,headers=headers),timeout=30) as r:
-            data=r.read(LIMIT+1)
+            data=bounded_read(r,LIMIT)
     except urllib.error.HTTPError as ex:
         raise GitHubReadError(ex.code) from None
     except urllib.error.URLError:

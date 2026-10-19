@@ -127,7 +127,7 @@ class FirstInstallation(unittest.TestCase):
         with self.assertRaises(ValueError):b.request('/commits/main',self.token)
 
     def test_transient_metadata_failure_retries_once(self):
-        response=unittest.mock.MagicMock();response.__enter__.return_value.read.return_value=b'{"ok":true}'
+        response=io.BytesIO(b'{"ok":true}')
         opener=unittest.mock.Mock();opener.open.side_effect=[urllib.error.HTTPError(b.API,504,'',{},None),response]
         with patch.object(b.urllib.request,'build_opener',return_value=opener),patch.object(b.time,'sleep'):
             self.assertTrue(b.request('/releases/latest',self.token)['ok'])

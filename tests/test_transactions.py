@@ -100,8 +100,8 @@ apply_draft "$TEST_ROOT/candidate"''',1)
         self.assertNotIn('stop sing-box',(self.p/'service.log').read_text() if (self.p/'service.log').exists() else '')
 
     def test_signal_rolls_back(self):
-        self.run_bash('begin_transaction\nsystemctl stop sing-box\nkill -TERM $$',143)
-        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists())
+        output=self.run_bash('begin_transaction\nsystemctl stop sing-box\nkill -TERM $$',143)
+        self.assertRestored(); self.assertFalse((self.p/'state/pending').exists(),output)
 
     def test_kill9_recovery(self):
         self.run_bash('begin_transaction\nsystemctl stop sing-box\nkill -KILL $$',-9)

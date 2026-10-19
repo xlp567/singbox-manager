@@ -24,6 +24,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
+import uuid
 """Pinned release signatures and static inspection; never executes a candidate."""
 import hashlib
 import json
@@ -35,11 +36,22 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 PUBLIC_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAW8DuzbY0y6ySdV3EfX0XtEe7NogBEQ4GTbFfgadED/ singbox-manager-release'
 SIGNER='singbox-manager-release'
 NAMESPACE='singbox-manager-release'
 TRUST_LIMIT=2*1024*1024
+
+
+def bounded_read(response,limit=TRUST_LIMIT):
+    chunks=[];total=0
+    while total<=limit:
+        chunk=response.read(min(65536,limit+1-total))
+        if not chunk:break
+        chunks.append(chunk);total+=len(chunk)
+    if total>limit:raise ValueError('发布响应超过大小限制')
+    return b''.join(chunks)
 
 
 def version_tuple(value):
@@ -106,12 +118,17 @@ class ReleaseAssetRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def asset_bytes(url,token=''):
-    if not re.fullmatch(r'https://api\.github\.com/repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/assets/\d+',url):raise ValueError('发布附件地址无效')
-    headers={'Accept':'application/octet-stream','User-Agent':'singbox-manager-release','X-GitHub-Api-Version':'2022-11-28'}
-    if token:headers['Authorization']='Bearer '+token
+    api=bool(re.fullmatch(r'https://api\.github\.com/repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/assets/\d+',url))
+    browser=bool(re.fullmatch(r'https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/v\d+\.\d+\.\d+/[A-Za-z0-9_.-]+',url))
+    if not api and not browser:raise ValueError('发布附件地址无效')
+    headers={'Accept':'application/octet-stream','User-Agent':'singbox-manager-release','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
+    if api:
+        url+='?download=1&sbm='+uuid.uuid4().hex
+        if token:headers['Authorization']='Bearer '+token
     try:
         with urllib.request.build_opener(ReleaseAssetRedirect).open(urllib.request.Request(url,headers=headers),timeout=30) as response:
-            data=response.read(TRUST_LIMIT+1)
+            if 'application/json' in response.headers.get('Content-Type',''):raise ValueError('发布附件返回了元数据，拒绝作为程序使用')
+            data=bounded_read(response)
     except urllib.error.HTTPError as error:raise ValueError('发布附件读取失败（HTTP '+str(error.code)+'）') from None
     except urllib.error.URLError:raise ValueError('无法下载正式发布附件') from None
     if len(data)>TRUST_LIMIT:raise ValueError('发布附件超过大小限制')
@@ -119,6 +136,8 @@ def asset_bytes(url,token=''):
 
 
 def download_release(api,destination,required,json_request,asset_request=asset_bytes,token='',current_version='',release=None):
+    repository=re.fullmatch(r'https://api\.github\.com/repos/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)',api)
+    if not repository:raise ValueError('正式发布仓库地址无效')
     release=release or json_request(api+'/releases/latest',token)
     tag=release.get('tag_name','')
     if release.get('draft') is not False or release.get('prerelease') is not False or not re.fullmatch(r'v\d+\.\d+\.\d+',tag):
@@ -134,7 +153,11 @@ def download_release(api,destination,required,json_request,asset_request=asset_b
         item=names.get(name)
         if not item or type(item.get('id')) is not int or type(item.get('size')) is not int or not 0<item['size']<=TRUST_LIMIT:
             raise ValueError('最新正式 Release 缺少签名附件：'+name)
-        data=asset_request(api+'/releases/assets/'+str(item['id']),token)
+        # Public downloads use the version-bound official download URL. Old
+        # asset-ID API responses can remain cached after assets are replaced.
+        # Private repositories still use authenticated API content requests.
+        url=(api+'/releases/assets/'+str(item['id'])) if token else ('https://github.com/'+repository[1]+'/releases/download/'+tag+'/'+name)
+        data=asset_request(url,token)
         if len(data)!=item['size']:raise ValueError('发布附件长度不符')
         p=destination/name
         if p.is_symlink():raise ValueError('发布附件目标不得为符号链接')
@@ -160,10 +183,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def read(path,token=''):
     if not re.fullmatch(r'/releases/latest|/git/ref/tags/v\d+\.\d+\.\d+|/git/tags/[a-f0-9]{40}',path):raise ValueError('安装路径无效')
-    headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-public-install','X-GitHub-Api-Version':'2022-11-28'}
+    headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-public-install','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     if token:headers['Authorization']='Bearer '+token
     try:
-        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path,headers=headers),timeout=25) as response:data=response.read(LIMIT+1)
+        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=25) as response:data=bounded_read(response,LIMIT)
     except urllib.error.HTTPError as error:raise ValueError('GitHub HTTP '+str(error.code)+'；请确认仓库访问权限，或稍后重试') from None
     except (urllib.error.URLError,TimeoutError):raise ValueError('无法连接 GitHub，请稍后重试') from None
     if len(data)>LIMIT:raise ValueError('安装响应过大')

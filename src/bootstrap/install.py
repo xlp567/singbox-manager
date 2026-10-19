@@ -14,7 +14,8 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
-from sbm.core.release_trust import download_release,verify_directory,static_script_info,asset_bytes
+import uuid
+from sbm.core.release_trust import download_release,verify_directory,static_script_info,asset_bytes,bounded_read
 
 REPOSITORY='xlp567/singbox-manager'
 CHANNEL='stable'
@@ -31,12 +32,12 @@ def request(path,token):
     if not re.fullmatch(r'/releases/latest|/git/ref/tags/v\d+\.\d+\.\d+|/git/tags/[a-f0-9]{40}',path):
         raise ValueError('拒绝非本仓库安装地址')
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-install',
-             'X-GitHub-Api-Version':'2022-11-28'}
+             'X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     if token:headers['Authorization']='Bearer '+token
     for attempt in range(2):
         try:
-            with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path,headers=headers),timeout=20) as response:
-                data=response.read(LIMIT+1)
+            with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=20) as response:
+                data=bounded_read(response,LIMIT)
             if len(data)>LIMIT:raise ValueError('GitHub 安装响应过大')
             value=json.loads(data)
             if not isinstance(value,dict):raise ValueError('GitHub 安装响应格式异常')

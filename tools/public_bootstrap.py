@@ -6,7 +6,8 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from sbm.core.release_trust import download_release,asset_bytes
+import uuid
+from sbm.core.release_trust import download_release,asset_bytes,bounded_read
 
 API='https://api.github.com/repos/xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -18,10 +19,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def read(path,token=''):
     if not re.fullmatch(r'/releases/latest|/git/ref/tags/v\d+\.\d+\.\d+|/git/tags/[a-f0-9]{40}',path):raise ValueError('安装路径无效')
-    headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-public-install','X-GitHub-Api-Version':'2022-11-28'}
+    headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-public-install','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     if token:headers['Authorization']='Bearer '+token
     try:
-        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path,headers=headers),timeout=25) as response:data=response.read(LIMIT+1)
+        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=25) as response:data=bounded_read(response,LIMIT)
     except urllib.error.HTTPError as error:raise ValueError('GitHub HTTP '+str(error.code)+'；请确认仓库访问权限，或稍后重试') from None
     except (urllib.error.URLError,TimeoutError):raise ValueError('无法连接 GitHub，请稍后重试') from None
     if len(data)>LIMIT:raise ValueError('安装响应过大')

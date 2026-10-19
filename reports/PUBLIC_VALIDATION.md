@@ -9,11 +9,11 @@
 | 3.5.3 | 私有源首次安装与已有安装保护 | 当时各 174 项通过 |
 | 3.5.4 | 匿名安装、管理器升级、节点连接 | 当时各 186 项通过，练手验收通过 |
 | 3.5.5 | 事务停止服务、发布隐私 | 当时本地 208 项通过，未部署 |
-| 3.5.6 | 四项安全 / 可靠性修复与实际部署 | macOS / Debian 各 241 项通过；下述实际验证通过 |
+| 3.5.6 | 四项安全 / 可靠性修复与实际部署 | macOS / Debian 各 246 项通过；下述实际验证通过 |
 
 ## v3.5.6 — 2026-10-20
 
-- macOS 与 Debian 自动化各 **241/241**；Bash 语法、ShellCheck、脚本摘要通过。
+- macOS 与 Debian 自动化各 **246/246**；Bash 语法、ShellCheck、脚本摘要通过。
 - 官方 sing-box **1.14.3**：本机九协议实际传输通过；练手 Debian 上九协议实际传输连续 **3 轮**通过，出口安全 **27 项 × 3 轮**通过。回环、私网、元数据、IPv6、映射地址、域名私网 / 混合结果 / 解析失败均被拒绝，正常请求通过。
 - 上述隔离连接测试使用拒绝规则之后的测试专用目标映射，将合成公网目标指向回环测试源站；生产配置不含这些覆盖字段，不向真实元数据服务发请求。
 - JSON 自定义 SOCKS 与官方 Schema 自动生成的 Snell 实际传输通过；管理脚本未被模块创建修改。
@@ -27,7 +27,7 @@
 
 ## English
 
-v3.5.6 passed **241/241** automated checks on both macOS and Debian, plus Bash syntax, ShellCheck and distribution checksums. Official sing-box 1.14.3 completed nine-protocol local transfers; the authorized Debian practice host passed **3 rounds** of nine-protocol transfers and **27 egress cases per round**. Test-only mappings after the deny rules keep synthetic public destinations local; production configuration contains no such overrides. No real metadata service is contacted.
+v3.5.6 passed **246/246** automated checks on both macOS and Debian, plus Bash syntax, ShellCheck and distribution checksums. Official sing-box 1.14.3 completed nine-protocol local transfers; the authorized Debian practice host passed **3 rounds** of nine-protocol transfers and **27 egress cases per round**. Test-only mappings after the deny rules keep synthetic public destinations local; production configuration contains no such overrides. No real metadata service is contacted.
 
 JSON-only SOCKS and Schema-generated Snell transfers passed. A disposable systemd unit passed **10 stages**, covering three stop/start/restart cycles, migration, failed-runtime rollback, forced termination/recovery, corrupt-audit operation/repair and deduplicated retention of ten automatic snapshots. Existing production service names were not used for fault injection.
 

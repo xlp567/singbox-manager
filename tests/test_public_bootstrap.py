@@ -41,7 +41,7 @@ class PublicBootstrap(unittest.TestCase):
         self.assertFalse(self.marker.exists())
 
     def test_public_metadata_request_has_no_authorization(self):
-        response=unittest.mock.MagicMock();response.__enter__.return_value.read.return_value=b'{"ok":true}'
+        response=io.BytesIO(b'{"ok":true}')
         opener=unittest.mock.Mock();opener.open.return_value=response
         with patch.object(p.urllib.request,'build_opener',return_value=opener):self.assertTrue(p.read('/releases/latest')['ok'])
         self.assertIsNone(opener.open.call_args.args[0].get_header('Authorization'))

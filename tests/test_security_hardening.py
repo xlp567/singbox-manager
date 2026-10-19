@@ -181,6 +181,47 @@ class ReleaseTrust(unittest.TestCase):
         self.signed.release['tag_name']='v9.9.9'
         with self.assertRaisesRegex(ValueError,'标签'):self.download()
 
+    def test_public_downloads_are_bound_to_version_and_asset_name(self):
+        requests=[];dest=self.root/'public';dest.mkdir()
+        def asset(url,token):
+            requests.append(url)
+            self.assertTrue(url.startswith('https://github.com/xlp567/singbox-manager/releases/download/v3.5.6/'))
+            return self.signed.asset(url,token)
+        release_trust.download_release('https://api.github.com/repos/xlp567/singbox-manager',dest,
+            ('singbox-manager.sh','singbox-manager.sha256'),self.signed.request,asset)
+        self.assertEqual(len(requests),4)
+
+    def test_private_downloads_use_authenticated_asset_api(self):
+        requests=[];dest=self.root/'private';dest.mkdir()
+        def asset(url,token):
+            requests.append(url);self.assertEqual(token,'private-fixture')
+            self.assertIn('/releases/assets/',url);return self.signed.asset(url,token)
+        release_trust.download_release('https://api.github.com/repos/xlp567/singbox-manager',dest,
+            ('singbox-manager.sh','singbox-manager.sha256'),self.signed.request,asset,token='private-fixture')
+        self.assertEqual(len(requests),4)
+
+    def test_stale_asset_content_is_rejected_before_candidate_execution(self):
+        self.signed.payload['singbox-manager.sh']=b'old cached asset of a different size'
+        with self.assertRaisesRegex(ValueError,'长度'):self.download()
+
+    def test_asset_credentials_stay_on_api_and_requests_bypass_old_cache(self):
+        requests=[]
+        class Response(io.BytesIO):headers={'Content-Type':'application/octet-stream'}
+        class Opener:
+            def open(self,request,timeout):requests.append(request);return Response(b'fixture')
+        with patch.object(release_trust.urllib.request,'build_opener',return_value=Opener()):
+            for _ in range(2):release_trust.asset_bytes('https://api.github.com/repos/a/b/releases/assets/1','private-fixture')
+            release_trust.asset_bytes('https://github.com/a/b/releases/download/v3.5.6/install.py','private-fixture')
+        self.assertNotEqual(requests[0].full_url,requests[1].full_url)
+        self.assertEqual(requests[0].get_header('Authorization'),'Bearer private-fixture')
+        self.assertIsNone(requests[2].get_header('Authorization'))
+
+    def test_short_network_reads_are_completed_with_a_hard_size_limit(self):
+        class ShortReader(io.BytesIO):
+            def read(self,size=-1):return super().read(min(size,2))
+        self.assertEqual(release_trust.bounded_read(ShortReader(b'complete'),8),b'complete')
+        with self.assertRaises(ValueError):release_trust.bounded_read(ShortReader(b'oversized'),4)
+
     def test_redirect_drops_token_and_rejects_non_github_asset_hosts(self):
         request=release_trust.urllib.request.Request('https://api.github.com/repos/a/b/releases/assets/1',headers={'Authorization':'Bearer private-fixture'})
         handler=release_trust.ReleaseAssetRedirect()

@@ -47,7 +47,9 @@ class SignedRelease:
         if '/git/ref/tags/' in url:return {'object':{'type':'commit','sha':self.commit}}
         raise AssertionError('Unexpected release request')
 
-    def asset(self,url,token=''):return self.payload[self.ids[int(url.rsplit('/',1)[1])]]
+    def asset(self,url,token=''):
+        tail=url.rsplit('/',1)[1]
+        return self.payload[self.ids[int(tail)] if tail.isdigit() else tail]
 
     def activate(self,*modules):
         stack=contextlib.ExitStack();seen=set()
