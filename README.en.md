@@ -6,6 +6,8 @@
 
 ![Version](https://img.shields.io/badge/version-3.5.4-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
+[Official project releases and downloads](https://github.com/xlp567/singbox-manager/releases/latest) include the full source package, standalone manager and SHA-256 checksums.
+
 ## Quick start
 
 Log in to a new **Debian / Ubuntu VPS** as root and run:

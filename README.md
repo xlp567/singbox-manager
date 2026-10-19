@@ -6,6 +6,8 @@
 
 ![Version](https://img.shields.io/badge/version-3.5.4-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
+[正式版本与下载附件](https://github.com/xlp567/singbox-manager/releases/latest)：包含完整源码包、独立管理脚本及 SHA-256 校验文件。
+
 ## 快速开始
 
 在新的 **Debian / Ubuntu VPS** 上用 root 登录 SSH，执行：
