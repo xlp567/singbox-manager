@@ -7,7 +7,7 @@
 1. 更新 `SBM_VERSION`、版本说明及中英文文档，执行适用的自动化回归和分发检查。管理器发布与 sing-box 核心发布分别处理。
 2. 使用 `tools/prepare_github.py` 的白名单同步本地和 GitHub 源码。禁止包含 VPS 配置、凭据、证书私钥、缓存和整机备份。
 3. 运行 `python3 tools/package.py`，生成 `dist/singbox-manager-v<版本>.tar.gz` 与 `dist/SHA256SUMS`。源码包只包含已发布文件；重复构建应产生相同摘要。
-4. 在已核对的提交上创建 `v<版本>` 标签和同名 Release，填写中英文更新说明、安装 / 升级入口、适用系统、验证结果及已知限制。
+4. 在已核对的提交上创建 `v<版本>` 标签；Release 标题也只填写同一个版本号（例如 `v3.5.4`），不加描述性副标题。中英文更新说明、安装 / 升级入口、适用系统、验证结果及已知限制放在正文。
 5. 上传四个附件：完整源码包、`singbox-manager.sh`、`singbox-manager.sha256`、`SHA256SUMS`。校验文件应与本次附件匹配。
 6. 发布后通过匿名下载核对全部附件及标签提交；确认 Release 页面可见，并把发布地址和验证结果告知用户。
 
@@ -20,7 +20,7 @@ Every version must synchronize local source, GitHub source and a tagged GitHub R
 1. Update the version and bilingual documentation, then run checks appropriate to the change. Keep manager releases separate from sing-box runtime releases.
 2. Publish only the allowlisted source from `tools/prepare_github.py`. Exclude server state, credentials, private keys, caches and machine backups.
 3. Run `python3 tools/package.py`. The archive must match the published source and produce the same checksum on repeated builds.
-4. Create `v<version>` on the verified commit and publish a release with Chinese and English notes, installation/update instructions, supported systems, validation and limitations.
+4. Create `v<version>` on the verified commit. Use only that version string as the release title (for example, `v3.5.4`), without a descriptive subtitle. Put Chinese and English notes, installation/update instructions, supported systems, validation and limitations in the body.
 5. Attach the source archive, standalone manager, companion manager checksum and `SHA256SUMS`.
 6. Download every attachment anonymously and verify checksums and tag identity. Report the published URL and validation result.
 
