@@ -1,5 +1,17 @@
 # Changelog / 更新记录
 
+## 3.5.5 — 2026-10-20
+
+- 菜单 16 接入与 15 / 17 相同的服务事务入口：快照、停止状态与主进程检查、失败 / 中断回滚、审计。
+- 停止服务不依赖可用配置或运行程序；启动 / 重启继续执行兼容性、配置与运行健康检查。
+- 清理源码中残留的部署标识，验收脚本改用私有目标标记与显式进程基线；原始实机报告从发布清单移除。
+- 源码发布和打包增加隐私门禁，扫描地址、SSH 端口、凭据和解码后的 Python 引擎；补充中英文说明和回归测试。
+
+- Menu 16 now shares transactional service control with 15 / 17, including snapshots, stopped-state / PID checks, audit and rollback after failure or interruption.
+- Stopping works even with invalid configuration or a missing runtime. Start and restart retain validation and running-health checks.
+- Remove deployment identifiers from source, parameterize acceptance guards and exclude raw live-server reports from publication.
+- Add shared source/package privacy checks, decoded-engine scanning, bilingual documentation and regression coverage.
+
 ## 3.5.4 — 2026-10-20
 
 - 公开发布准备：MIT 许可证、中英文介绍与完整操作手册。

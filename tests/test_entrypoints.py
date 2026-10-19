@@ -5,6 +5,12 @@ from common import ROOT
 
 
 class Entrypoints(unittest.TestCase):
+    def test_service_menu_actions_share_transaction_path(self):
+        for name in ['src/manager-core.sh','singbox-manager.sh']:
+            s=(ROOT/name).read_text()
+            for number,command in [(15,'start'),(16,'stop'),(17,'restart')]:
+                self.assertIn(f'{number}) service_action {command};;',s)
+
     def test_all_27_menu_actions_preserved(self):
         s=(ROOT/'src/manager-core.sh').read_text()
         menu=s.split("cat <<'MENU'",1)[1].split('\nMENU',1)[0]

@@ -179,3 +179,9 @@ with zipfile.ZipFile(io.BytesIO(data)) as archive:
 print('PASS: bundled Python files match source:', len(expected))
 PY
 ```
+
+## 11. Stopping services and publication privacy (v3.5.5)
+
+Menu 16 shares the transaction entry point with 15 / 17. It saves a full snapshot, then checks ActiveState=inactive and MainPID=0 five times, two seconds apart. Failure or interruption restores the previous state and records an audit event. Stop does not require valid configuration or an available runtime. Start and restart retain their compatibility and configuration checks.
+
+Run `bash tools/test.sh` and `python3 tools/package.py` after building. The publication manifest and archive share a privacy gate. Do not publish runtime directories, node data or raw deployment reports. See the [release procedure](../RELEASING.md) for checks and historical copies. This revision is tested locally; no VPS is contacted.

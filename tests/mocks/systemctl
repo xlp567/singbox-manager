@@ -6,14 +6,23 @@ cmd=sys.argv[1]
 with open(os.environ['MOCK_LOG'],'a') as f: f.write(' '.join(sys.argv[1:])+'\n')
 if cmd=='is-active': sys.exit(0 if m['active'] else 3)
 if cmd=='is-enabled': sys.exit(0 if m['enabled'] else 1)
-if cmd=='show': print('12345' if m['active'] else '0'); sys.exit(0)
+if cmd=='show':
+    if (p.parent/'fail-show').exists(): sys.exit(1)
+    if 'ActiveState' in sys.argv: print('active' if m['active'] else 'inactive')
+    else: print('12345' if m['active'] or (p.parent/'lingering-pid').exists() else '0')
+    sys.exit(0)
 if cmd=='daemon-reload': sys.exit(0)
 if cmd in {'restart','start'}:
     flag=p.parent/'fail-restart'
     if flag.exists(): flag.unlink(); sys.exit(1)
     if (p.parent/'fail-all-restarts').exists(): sys.exit(1)
     m['active']=True
-elif cmd=='stop': m['active']=False
+elif cmd=='stop':
+    flag=p.parent/'fail-stop'
+    if flag.exists(): flag.unlink(); sys.exit(1)
+    flag=p.parent/'ignore-stop'
+    if flag.exists(): flag.unlink(); sys.exit(0)
+    m['active']=False
 elif cmd=='enable': m['enabled']=True
 elif cmd=='disable': m['enabled']=False
 else: raise RuntimeError('unexpected systemctl command '+cmd)

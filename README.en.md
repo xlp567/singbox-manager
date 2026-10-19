@@ -4,7 +4,7 @@
 
 [简体中文](README.md) · English · [English user guide](docs/USER_GUIDE.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md)
 
-![Version](https://img.shields.io/badge/version-3.5.4-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.5.5-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [Official project releases and downloads](https://github.com/xlp567/singbox-manager/releases/latest) include the full source package, standalone manager and SHA-256 checksums.
 
@@ -87,3 +87,9 @@ Publish source, version, documentation and test evidence together; read back the
 ## License
 
 [MIT](LICENSE) for this manager and original repository code. SagerNet sing-box and other third-party programs retain their own licenses. This is an independent project, not an official SagerNet management tool.
+
+## v3.5.5 service control and publication privacy
+
+Menu actions **15 / 16 / 17** share transactional service control. Stop takes a backup, verifies inactive state and process exit over an observation window, and restores the previous state on failure or interruption. Invalid configuration or a missing runtime does not block stopping.
+
+Source and release packages share a privacy gate, including decoded Python source. Raw deployment logs are excluded. See the [release procedure](RELEASING.md) for historical cleanup scope and limitations.

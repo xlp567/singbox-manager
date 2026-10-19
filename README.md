@@ -4,7 +4,7 @@
 
 简体中文 · [English](README.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md) · [English guide](docs/USER_GUIDE.en.md)
 
-![Version](https://img.shields.io/badge/version-3.5.4-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.5.5-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [正式版本与下载附件](https://github.com/xlp567/singbox-manager/releases/latest)：包含完整源码包、独立管理脚本及 SHA-256 校验文件。
 
@@ -88,3 +88,9 @@ python3 tools/package.py   # 打包完整源码、文档和已发布的验证记
 ## 许可证
 
 [MIT](LICENSE)。本许可证适用于管理器及本仓库原创代码；SagerNet sing-box 和其他第三方程序遵循各自许可证。本项目不是 SagerNet 官方管理工具。
+
+## v3.5.5 服务控制与发布隐私
+
+菜单 **15 / 16 / 17** 共用事务服务入口。停止服务会先备份，再持续确认服务已停止且主进程退出；失败或中断时自动恢复之前状态。配置损坏或运行文件缺失不会阻止停止。
+
+源码和下载包共用隐私检查，原始部署日志不进入公开分发；发布检查覆盖内嵌 Python 源码。历史信息清理的范围和限制见 [发布规范](RELEASING.md)。

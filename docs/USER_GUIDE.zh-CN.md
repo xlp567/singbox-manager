@@ -179,3 +179,9 @@ with zipfile.ZipFile(io.BytesIO(data)) as archive:
 print('PASS: bundled Python files match source:', len(expected))
 PY
 ```
+
+## 11. 服务停止与发布隐私（v3.5.5）
+
+菜单 16 与 15 / 17 共用事务入口。停止前保存完整快照，随后用 5 次检查（每次间隔 2 秒）确认 ActiveState=inactive、MainPID=0，失败或中断自动恢复之前状态，记录事务审计。不检查无效配置或缺失运行程序，避免无法停止问题服务；启动 / 重启仍先做配置与兼容性检查。
+
+源码构建后执行 `bash tools/test.sh` 与 `python3 tools/package.py`，发布清单和源码包会经过同一隐私门禁，拒绝不合规内容。不要上传运行目录、节点资料或原始部署报告。隐私检查和历史副本处理见 [发布规范](../RELEASING.md)。本次只做本地隔离测试，未连接 VPS。

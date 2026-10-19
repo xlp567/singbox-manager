@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.5.4
+SBM_VERSION=3.5.5
 SHORTCUT=/usr/local/bin/sbm
 TMP=''; TX=''; CANDIDATE=''; ACTION_ID=manual
 # Shared with transactions.sh bundled below.
@@ -327,15 +327,32 @@ firewall_info() {
     if command -v firewall-cmd >/dev/null; then firewall-cmd --list-all || true; fi
     say '脚本不自动变更防火墙、SSH 或系统网络参数。'
 }
+service_stopped() {
+    local observed_state pid
+    for _ in 1 2 3 4 5; do
+        sleep 2
+        observed_state=$(systemctl show sing-box -p ActiveState --value) || return 1
+        pid=$(systemctl show sing-box -p MainPID --value) || return 1
+        [[ $observed_state == inactive && $pid == 0 ]] || return 1
+    done
+}
 service_action() {
     local command=$1 binary
-    binary=$(active_binary) || die '尚未安装。'
+    case $command in start|stop|restart) ;; *) die '未知服务操作。';; esac
     managed_unit_check
-    if [[ -f $CONF/manager.json ]]; then engine compatibility "$CONF/manager.json" "$binary"; fi
-    "$binary" check -c "$CONF/config.json"
+    # A broken configuration or missing runtime must not prevent a safe stop.
+    if [[ $command != stop ]]; then
+        binary=$(active_binary) || die '尚未安装。'
+        if [[ -f $CONF/manager.json ]]; then engine compatibility "$CONF/manager.json" "$binary"; fi
+        "$binary" check -c "$CONF/config.json"
+    fi
     begin_transaction
-    systemctl "$command" sing-box
-    health || die '服务未稳定运行，自动恢复之前状态。'
+    systemctl "$command" sing-box || die '服务操作失败，自动恢复之前状态。'
+    if [[ $command == stop ]]; then
+        service_stopped || die '服务未稳定停止，自动恢复之前状态。'
+    else
+        health || die '服务未稳定运行，自动恢复之前状态。'
+    fi
     commit_transaction
 }
 diagnostics() {
@@ -904,7 +921,7 @@ action() (
         14) engine connections "$CONF";;
         15) service_action start;;
         17) service_action restart;;
-        16) systemctl stop sing-box;;
+        16) service_action stop;;
         18) snapshot; say '快照含明文凭据和运行二进制，请私密保存。';;
         19) restore_action;; 20) edit_nodes loglevel;;
         21) uninstall_action;;

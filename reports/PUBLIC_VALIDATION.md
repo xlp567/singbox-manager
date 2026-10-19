@@ -9,11 +9,10 @@
 | 3.5.3 | 私有 GitHub 首次安装与已有安装保护 / private bootstrap and existing installation protection | 当时回归各 174 项通过 / 174 tests per platform passed |
 | 3.5.4 | 公开源匿名安装、管理器升级与节点连接 / anonymous bootstrap, manager update and transfers | 当时回归各 186 项通过，练手验证通过 / 186 tests per platform and authorized practice checks passed |
 
+历史实机结果不代表后续版本已部署。v3.5.5 本次仅本地隔离验证，没有连接 VPS，没有重启服务或修改节点配置。
 
-本附件为 v3.5.4 文档与隐私清理后的源码快照，保留 v3.5.4 管理行为。Base64 和源码构建说明已同步；菜单 16 的功能修复在 v3.5.5 发布。没有连接 VPS。
+Raw deployment logs and private infrastructure identifiers are excluded from public source and downloads. Historical live checks do not imply that later versions have been deployed. This v3.5.5 change is being verified locally with isolated service doubles; no VPS is contacted.
 
-This refreshed v3.5.4 source snapshot includes documentation and privacy cleanup while preserving v3.5.4 manager behavior. The menu 16 fix ships in v3.5.5. No VPS was contacted.
+v3.5.5：macOS 完整验证 208/208 通过；Bash 语法、ShellCheck、分发摘要通过。包含新增 10 项服务入口 / 事务回归和 12 项发布隐私回归。
 
-文档与隐私清理快照：本地 198/198 自动化测试通过；Bash / ShellCheck / 分发摘要通过。
-
-Refreshed snapshot: 198/198 local tests, Bash syntax, ShellCheck and distribution checksums passed.
+v3.5.5: 208/208 local macOS tests passed, plus Bash syntax, ShellCheck and distribution checksums. Added 10 service-entry/transaction cases and 12 publication-privacy cases.

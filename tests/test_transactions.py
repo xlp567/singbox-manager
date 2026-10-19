@@ -119,6 +119,59 @@ apply_draft "$TEST_ROOT/candidate"''',1)
         self.assertEqual(json.loads((self.p/'service.json').read_text()),{'active':False,'enabled':False})
         self.assertFalse((self.p/'state/pending').exists())
 
+    def test_manual_stop_commits_after_inactive_and_zero_pid(self):
+        self.run_bash('sleep() { :; }\nservice_action stop')
+        self.assertEqual(json.loads((self.p/'service.json').read_text()),{'active':False,'enabled':True})
+        self.assertEqual((self.p/'config/manager.json').read_bytes(),self.old)
+        self.assertFalse((self.p/'state/pending').exists())
+        log=(self.p/'service.log').read_text()
+        self.assertEqual(log.count('show sing-box -p ActiveState --value'),5)
+        self.assertEqual(log.count('show sing-box -p MainPID --value'),5)
+        self.assertNotIn('restart sing-box',log)
+        events=[json.loads(row)['event'] for row in (self.p/'state/audit.jsonl').read_text().splitlines()]
+        self.assertIn('transaction-begin',events)
+        self.assertIn('transaction-commit',events)
+
+    def test_manual_stop_failure_restores_original_running_state(self):
+        self.run_bash('touch "$TEST_ROOT/fail-stop"\nservice_action stop',1)
+        self.assertRestored();self.assertFalse((self.p/'state/pending').exists())
+
+    def test_manual_stop_success_without_stopping_rolls_back(self):
+        self.run_bash('sleep() { :; }\ntouch "$TEST_ROOT/ignore-stop"\nservice_action stop',1)
+        self.assertRestored();self.assertFalse((self.p/'state/pending').exists())
+
+    def test_manual_stop_rejects_lingering_pid(self):
+        self.run_bash('sleep() { :; }\ntouch "$TEST_ROOT/lingering-pid"\nservice_action stop',1)
+        self.assertRestored();self.assertFalse((self.p/'state/pending').exists())
+
+    def test_manual_stop_rejects_unreadable_service_state(self):
+        self.run_bash('sleep() { :; }\ntouch "$TEST_ROOT/fail-show"\nservice_action stop',1)
+        self.assertRestored();self.assertFalse((self.p/'state/pending').exists())
+
+    def test_manual_stop_with_invalid_config_does_not_require_validation(self):
+        (self.p/'config/config.json').write_text('{invalid')
+        (self.p/'config/manager.json').write_text('{invalid')
+        self.run_bash('sleep() { :; }\nservice_action stop')
+        self.assertFalse(json.loads((self.p/'service.json').read_text())['active'])
+        self.assertEqual((self.p/'config/config.json').read_text(),'{invalid')
+
+    def test_manual_stop_without_runtime_and_already_inactive(self):
+        (self.p/'runtime/current').unlink()
+        (self.p/'service.json').write_text(json.dumps({'active':False,'enabled':False}))
+        self.run_bash('sleep() { :; }\nservice_action stop')
+        self.assertEqual(json.loads((self.p/'service.json').read_text()),{'active':False,'enabled':False})
+        self.assertFalse((self.p/'runtime/current').exists())
+        self.assertFalse((self.p/'state/pending').exists())
+
+    def test_unknown_service_action_never_changes_service(self):
+        self.run_bash('service_action disable',1)
+        self.assertFalse((self.p/'service.log').exists())
+        self.assertEqual(list((self.p/'state/backups').iterdir()),[])
+
+    def test_interrupt_during_stop_check_restores_original_state(self):
+        self.run_bash('sleep() { kill -TERM $$; }\nservice_action stop',143)
+        self.assertRestored();self.assertFalse((self.p/'state/pending').exists())
+
     def test_runtime_library_restored_after_failed_upgrade(self):
         (self.p/'runtime/releases/old/libcronet.so').write_bytes(b'original library')
         (self.p/'libcronet.so').write_bytes(b'candidate library')

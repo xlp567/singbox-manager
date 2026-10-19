@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.5.4
+SBM_VERSION=3.5.5
 SHORTCUT=/usr/local/bin/sbm
 TMP=''; TX=''; CANDIDATE=''; ACTION_ID=manual
 # Shared with transactions.sh bundled below.
@@ -501,7 +501,7 @@ action() (
         14) engine connections "$CONF";;
         15) service_action start;;
         17) service_action restart;;
-        16) systemctl stop sing-box;;
+        16) service_action stop;;
         18) snapshot; say '快照含明文凭据和运行二进制，请私密保存。';;
         19) restore_action;; 20) edit_nodes loglevel;;
         21) uninstall_action;;
