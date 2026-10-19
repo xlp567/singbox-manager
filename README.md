@@ -63,14 +63,25 @@ sbm self-update github    # 更新管理器
 - [自定义协议](自定义协议模块.md) · [更新记录](CHANGELOG.md) · [实际验证记录](测试与部署结果.md)
 - [参与贡献](CONTRIBUTING.md) · [许可证](LICENSE)
 
-## 开发与验证
+## 为什么脚本里有一大段 Base64？
+
+`singbox-manager.sh` 的 `emit_engine()` 函数中，`base64 -d <<'SBM_BUNDLE'` 后面的长文本，是**仓库 Python 管理引擎源码的 ZIP 压缩包经过 Base64 编码后的内容**。Base64 可以还原，不提供加密保护；可读源码位于 [src/sbm/](src/sbm/)。它负责协议适配、配置编译、验证和升级等管理工作，实际代理流量由单独安装的官方 sing-box 程序处理。
+
+需要 Python 引擎的管理操作会先把这段内容解码到私有临时目录中的 `engine.pyz`，再交给 `python3` 执行；正常结束后清理临时文件。这样既能按模块维护源码，也能只分发一个管理脚本。
+
+[tools/build.py](tools/build.py) 会把 [src/manager-core.sh](src/manager-core.sh) 与 `src/core/*.sh` 合并，将 `src/sbm/**/*.py` 打包并编码，自动生成 `emit_engine()`、最终脚本及配套 SHA-256 文件。修改功能时编辑 `src/`，再重新构建；不要手工修改生成文件中的 Base64。
+
+构建命令及只读检查包内源码的方法见[操作手册第 10 节](docs/USER_GUIDE.zh-CN.md#10-base64-与源码构建)。
+
+## 从源码构建与验证
 
 ```bash
-bash tools/test.sh
-python3 tools/package.py
+python3 tools/build.py     # 从源码生成脚本、摘要和安装入口
+bash tools/test.sh         # 重新构建，再执行语法、ShellCheck 和自动化测试
+python3 tools/package.py   # 打包完整源码、文档和已发布的验证记录
 ```
 
-开发验证需要 Python 3、Bash、ShellCheck。单元测试使用临时目录和服务替身；真实协议传输与部署验证另行记录，不能用模拟测试替代公网验收。源码在 `src/`，`tools/build.py` 生成可独立部署的 `singbox-manager.sh`、摘要和安装入口。
+在完整源码目录中执行以上命令。构建使用 Python 3 标准库；完整验证还需要 Bash 和 ShellCheck。构建生成 `singbox-manager.sh`、`singbox-manager.sha256`、`install.sh` 和 `新服务器一键安装命令.txt`，不会安装或启动 VPS 服务。单元测试使用临时目录和服务替身；真实协议传输与部署验证另行记录，不能用模拟测试替代公网验收。
 
 每次发布同步本地源码、版本、文档、测试结果和 GitHub，并读回核对发布文件。VPS 配置、证书、凭据、下载缓存和整机备份不属于仓库内容。GitHub 或网络不可达时下载 / 查询会失败，程序保留当前运行版本。
 

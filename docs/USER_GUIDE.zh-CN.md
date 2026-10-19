@@ -119,3 +119,63 @@ CLI 和菜单共用管理核心。修改仍按交互确认执行；不要把含�
 | 检测到外部修改 | 保留现有文件和备份，核对来源，再选择受控迁移方式 |
 
 提交 Issue 时提供版本、系统、复现步骤和脱敏错误，不要附上密码、令牌、私钥或完整客户端资料。
+
+## 10. Base64 与源码构建
+
+### `emit_engine()` 中的内容是什么？
+
+`base64 -d <<'SBM_BUNDLE'` 与结尾单独一行的 `SBM_BUNDLE` 之间，是 Python 管理引擎的 ZIP 压缩包经 Base64 编码后的文本。Base64 可以解码，不是加密。压缩包中包含 `sbm/` 下的 Python 模块和生成的 `__main__.py` 入口，用于协议适配、配置编译、参数验证、审计和管理器升级等功能。
+
+执行需要该引擎的管理操作时，`setup_tmp()` 创建 `/var/lib/singbox-manager/tmp.XXXXXX/` 私有临时目录，把 `emit_engine()` 的解码输出写成 `engine.pyz`，再由 `engine()` 调用 `python3` 运行。正常退出时删除临时目录；异常中断遗留的 `tmp.*` 会在下次取得管理锁后清理。官方 sing-box 代理程序独立位于 `/opt/singbox-manager/current/sing-box`。
+
+### 源码与生成文件
+
+| 文件 / 目录 | 用途 |
+|---|---|
+| [src/manager-core.sh](../src/manager-core.sh) | Bash 菜单与 CLI 主入口 |
+| [src/core/](../src/core/) | 运行版本、事务、服务控制和管理器升级的 Bash 模块 |
+| [src/sbm/](../src/sbm/) | 可直接阅读和修改的 Python 管理引擎源码 |
+| [tools/build.py](../tools/build.py) | 合并 Bash 模块，打包 Python ZIP 并编码，生成分发脚本与摘要 |
+| [tools/build_install_command.py](../tools/build_install_command.py) | 由主构建过程调用，生成安装入口和短命令 |
+
+构建器把 `src/sbm/` 下的全部 `.py` 文件按固定顺序写入 ZIP，并加入调用 `sbm.entrypoint.run()` 的 `__main__.py`；再把 ZIP 编码为 Base64，放进生成的 `emit_engine()`。Bash 的 `# @include core/…` 标记会被相应模块正文替换。最后输出完整脚本并计算它的 SHA-256。请修改源码后重建，不要直接改 Base64 或只修改生成脚本。
+
+### 从源码生成管理脚本
+
+取得完整仓库后，在仓库根目录执行：
+
+```bash
+git clone https://github.com/xlp567/singbox-manager.git
+cd singbox-manager
+python3 tools/build.py
+```
+
+若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.4`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
+
+- `singbox-manager.sh`：合并 Bash 管理层与 Python 引擎的独立管理脚本。
+- `singbox-manager.sha256`：上述脚本的 SHA-256 摘要。
+- `install.sh`、`新服务器一键安装命令.txt`：首次安装入口与短命令。
+
+在具备 Bash、ShellCheck 和 Python 3 的开发环境中运行 `bash tools/test.sh`，完成重建、语法检查、ShellCheck、自动化回归和分发摘要检查。需要完整源码包时运行 `python3 tools/package.py`；它生成 `dist/` 下的归档和 `SHA256SUMS`，与生成独立管理脚本是两个步骤。同一份源码在相同构建环境中重复构建，脚本摘要应一致。
+
+### 只读核对 Base64 与源码是否一致
+
+以下命令在仓库根目录执行，只解码、读取 ZIP 并比较文件内容，不运行包内代码，也不连接 VPS。无需手工解码即可直接阅读上表中的源码；此检查用于核对生成物。
+
+```bash
+python3 - <<'PY'
+import base64, io, pathlib, zipfile
+root = pathlib.Path('.')
+script = (root / 'singbox-manager.sh').read_text()
+payload = script.split("    base64 -d <<'SBM_BUNDLE'\n", 1)[1].split('\nSBM_BUNDLE\n', 1)[0]
+expected = {p.relative_to(root / 'src').as_posix(): p.read_bytes()
+            for p in (root / 'src/sbm').rglob('*.py')}
+expected['__main__.py'] = b'from sbm.entrypoint import run\nrun()\n'
+data = base64.b64decode(''.join(payload.split()), validate=True)
+with zipfile.ZipFile(io.BytesIO(data)) as archive:
+    assert set(archive.namelist()) == set(expected), 'Bundle file list differs'
+    for name, content in expected.items():
+        assert archive.read(name) == content, 'Source mismatch: ' + name
+print('PASS: bundled Python files match source:', len(expected))
+PY
+```

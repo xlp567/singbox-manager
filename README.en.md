@@ -62,14 +62,25 @@ Use menu **9** to export client information. Exports, QR codes, drafts and backu
 - [Architecture](架构与扩展.md) · [Custom protocols](自定义协议模块.md) · [File locations](文件目录速查.md)
 - [Contributing](CONTRIBUTING.md) · [License](LICENSE)
 
-## Development
+## Why is Base64 embedded in the script?
+
+The long text following `base64 -d <<'SBM_BUNDLE'` inside `emit_engine()` in `singbox-manager.sh` is **a ZIP archive of the repository's Python management engine, encoded as Base64**. Base64 is reversible encoding and provides no encryption. Readable source is available in [src/sbm/](src/sbm/). This engine handles protocol adaptation, configuration compilation, validation and manager updates; the separately installed official sing-box runtime handles proxy traffic.
+
+Management operations that need the engine decode it into `engine.pyz` in a private temporary directory, execute it with `python3`, and remove the temporary files on normal exit. This allows modular source maintenance while distributing a single manager script.
+
+[tools/build.py](tools/build.py) combines [src/manager-core.sh](src/manager-core.sh) with `src/core/*.sh`, packs and encodes `src/sbm/**/*.py`, and generates `emit_engine()`, the final script and its SHA-256 file. Edit `src/` and rebuild when changing functionality; do not edit the generated Base64 manually.
+
+See [section 10 of the user guide](docs/USER_GUIDE.en.md#10-embedded-base64-and-building-from-source) for build steps and a read-only check of the bundled source.
+
+## Build from source and validate
 
 ```bash
-bash tools/test.sh
-python3 tools/package.py
+python3 tools/build.py     # Generate the manager, checksum and installation entries
+bash tools/test.sh         # Rebuild, then run syntax checks, ShellCheck and tests
+python3 tools/package.py   # Package source, documentation and published test evidence
 ```
 
-Development checks require Python 3, Bash and ShellCheck. Unit tests use temporary directories and service substitutes; actual protocol transfers and deployment checks are recorded separately. Source lives in `src/`; `tools/build.py` creates the standalone manager, checksum and bootstrap entry.
+Run these commands from a complete source checkout. Building uses the Python 3 standard library; full validation also requires Bash and ShellCheck. Build outputs are `singbox-manager.sh`, `singbox-manager.sha256`, `install.sh` and `新服务器一键安装命令.txt`; building does not install or start VPS services. Unit tests use temporary directories and service substitutes; actual protocol transfers and deployment checks are recorded separately.
 
 Publish source, version, documentation and test evidence together; read back the GitHub files to verify consistency. VPS configurations, credentials, certificates, runtime caches and machine backups do not belong in the repository. Downloads and queries can fail during GitHub or network outages; the running version is preserved.
 
