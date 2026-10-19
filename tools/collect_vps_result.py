@@ -25,7 +25,7 @@ run(['/opt/singbox-manager/current/sing-box','check','-c','/etc/sing-box/config.
 model=json.loads(pathlib.Path('/etc/sing-box/manager.json').read_text())
 result={
     'verified_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    'target':'192.0.2.10:22',
+    'target':'practice-vps (redacted)',
     'system':run(['uname','-srmo']),
     'script_version':run(['/usr/local/bin/sbm','version']),
     'script_sha256':sha('/root/singbox-manager.sh'),

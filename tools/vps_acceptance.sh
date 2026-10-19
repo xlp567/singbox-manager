@@ -6,8 +6,13 @@ PROJECT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck disable=SC1091
 source "$PROJECT/singbox-manager.sh"
 set -Eeuo pipefail
-[[ ${EXPECTED_VPS_IP:-} == 192.0.2.10 ]] || die '仅允许本次授权的练手 VPS。'
-ip -4 -o addr show scope global | grep -q '192.0.2.10/' || die '本机 IP 不匹配练手 VPS。'
+# The authorized address lives only on the practice VPS (root-owned marker), never in the repository.
+MARKER=/root/.sbm-practice-vps
+[[ -f $MARKER && ! -L $MARKER && $(stat -c %u "$MARKER") == 0 ]] || die "缺少练手 VPS 标记文件 $MARKER。"
+AUTHORIZED_IP=$(tr -d '[:space:]' < "$MARKER")
+[[ $AUTHORIZED_IP =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || die '练手 VPS 标记文件内容无效。'
+[[ ${EXPECTED_VPS_IP:-} == "$AUTHORIZED_IP" ]] || die '仅允许本次授权的练手 VPS。'
+ip -4 -o addr show scope global | grep -qF " $AUTHORIZED_IP/" || die '本机 IP 不匹配练手 VPS。'
 ORIGINAL=${ACCEPTANCE_DIR:?必须明确指定本次验收备份目录}
 [[ $ORIGINAL == /root/sbm-v35-prebackup-* && $ORIGINAL != *'/../'* ]] || die '备份目录不匹配本次 v3.5 验收。'
 [[ -s $ORIGINAL/singbox-state.tar.gz && -f $ORIGINAL/prebackup.sha256 ]] || die '缺少部署前备份。'
