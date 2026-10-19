@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.5.1 — Debian / Ubuntu, Bash >=4, systemd
+# singbox-manager v3.5.2 — Debian / Ubuntu, Bash >=4, systemd
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.5.1
+SBM_VERSION=3.5.2
 SHORTCUT=/usr/local/bin/sbm
 TMP=''; TX=''; CANDIDATE=''; ACTION_ID=manual
 # Shared with transactions.sh bundled below.
@@ -495,7 +495,7 @@ action() (
         6) edit_nodes delete;; 7) edit_nodes rotate;;
         8) edit_nodes acme;; 9) export_action;;
         10) change_version;;
-        11) dependencies; fetch_versions; engine catalog "$TMP/catalog.json" "$(current_version)";;
+        11) dependencies; fetch_versions summary; engine catalog "$TMP/catalog.json" "$(current_version)";;
         12) diagnostics;;
         13) say 'Ctrl+C 返回菜单。日志可能包含访问地址；UDP 不能据此精确统计在线人数。'; journalctl -u sing-box -n 30 -f -o cat;;
         14) engine connections "$CONF";;

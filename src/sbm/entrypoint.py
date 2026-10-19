@@ -8,6 +8,12 @@ from .runtime import Runtime
 
 def main():
     command=sys.argv[1];args=sys.argv[2:]
+    if command=='fetch-releases':
+        from .core.release_fetch import fetch
+        fetch(*args);return
+    if command=='release-query-status':
+        from .core.release_fetch import status
+        status(*args);return
     if command=='manager-update':
         from .core.self_update import command as update_command
         return update_command(args)

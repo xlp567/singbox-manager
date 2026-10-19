@@ -329,7 +329,7 @@ def import_v1(path):
     if compile_config(m)!=c: fail('旧配置有自定义字段或不同默认值；拒绝覆盖，请人工迁移')
     return m
 
-def releases(source,out,arch):
+def releases(source,out,arch,metadata=None):
     data=load(source)
     if not isinstance(data,list): fail('GitHub API 返回错误，可能触发限流')
     rows=[]
@@ -351,7 +351,9 @@ def releases(source,out,arch):
     rows.sort(key=lambda r:r['published'],reverse=True)
     stable=max((r for r in rows if not r['preview'] and '-' not in r['version']), key=lambda r:tuple(map(int,r['version'].split('.'))), default=None)
     if not stable: fail('此次查询未找到稳定版；停止，避免误将测试版作为稳定版')
-    save(out,{'stable':stable,'latest':rows[0],'all':rows})
+    result={'stable':stable,'latest':rows[0],'all':rows}
+    if metadata:result['query']=load(metadata)
+    save(out,result)
 
 def vkey(v):
     """Semver-ish ordering: 1.15.0-alpha.10 > 1.15.0-alpha.9, and 1.15.0 > any 1.15.0-*."""
@@ -371,7 +373,10 @@ def version_summary(r,current):
     print('官方版本（本次实时查询）：')
     print('当前运行版本：'+(current or '未安装 / 无法读取'))
     print(f"最新稳定版：{s['version']} / {s['published'][:10]}{compare_note(s['version'],current)}")
-    print(f"最新发布版：{l['version']} / {'测试版' if l['preview'] else '稳定版'} / {l['published'][:10]}{compare_note(l['version'],current)}")
+    recent=r.get('query',{}).get('recent_available',True)
+    if recent:print(f"最新发布版：{l['version']} / {'测试版' if l['preview'] else '稳定版'} / {l['published'][:10]}{compare_note(l['version'],current)}")
+    else:print('最新发布版（含测试版）：本次查询未完成，暂不能确认；稳定版已单独实时查询。')
+    for warning in r.get('query',{}).get('warnings',[]):print('提示：'+warning)
     if current:
         try: newer=vkey(s['version'])>vkey(current)
         except ValueError: newer=None
@@ -383,7 +388,9 @@ def select_release(p,out,current=''):
     version_summary(r,current)
     ch=choose('安装版本',['最新稳定版（推荐）','最新发布版（可能是 alpha / beta）','从本次查询的其他版本中选择'])
     if ch==0: x=s
-    elif ch==1: x=l
+    elif ch==1:
+        if not r.get('query',{}).get('recent_available',True):fail('最新发布列表查询未成功，不能将稳定版冒充最新测试版；可选择已确认的稳定版')
+        x=l
     else:
         idx=choose('版本列表',[f"{v['version']} ({'测试' if v['preview'] else '稳定'}){'（当前运行）' if v['version']==current else ''}" for v in r['all']]); x=r['all'][idx]
     if x['preview'] and x['version']!=current and prompt('测试版可能有不兼容改动，输入 PREVIEW 确认')!='PREVIEW': fail('未选择测试版')
@@ -543,9 +550,19 @@ def dashboard(conf_dir,state_dir,current):
     cache=read(pathlib.Path(state_dir)/'latest-stable').split()
     vline=current or '未安装'
     if cache and current:
-        try: vline+=f'（最新稳定版 {cache[0]}，'+('可升级' if vkey(cache[0])>vkey(current) else '已是最新')+f'｜查询于 {cache[1] if len(cache)>1 else "?"}）'
+        try:
+            hint='上次查询稳定版 '+cache[0]+f'｜查询于 {cache[1] if len(cache)>1 else "?"}'
+            query=pathlib.Path(state_dir)/'latest-query.json'
+            try:query_failed=query.is_file() and load(query).get('success') is False
+            except (OSError,ValueError,AttributeError):query_failed=False
+            if query_failed:hint+='｜最近查询失败，暂无法判断是否最新'
+            else:hint+='｜当时'+('可升级' if vkey(cache[0])>vkey(current) else '无更新')
+            vline+='（'+hint+'）'
         except ValueError: pass
-    elif current: vline+='（菜单 11 可查询最新版本）'
+    elif current:
+        try:query_failed=load(pathlib.Path(state_dir)/'latest-query.json').get('success') is False
+        except (OSError,ValueError,AttributeError):query_failed=False
+        vline+='（最近查询失败，暂无法判断是否最新；菜单 11 可重试）' if query_failed else '（菜单 11 可查询最新版本）'
     W('版本',vline)
     rows,managed=service_inbounds(conf_dir)
     if not rows: W('节点','暂无')

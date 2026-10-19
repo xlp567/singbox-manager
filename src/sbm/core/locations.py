@@ -12,6 +12,7 @@ def inventory(conf,state,runtime,drop,exports,data,shortcut,script,unit):
            ('客户端导出资料（含凭据）',exports),('自定义 / 自动协议模块',s/'protocols'),
            ('已移除协议模块归档',s/'archived-protocols'),('事务恢复标记',s/'pending'),
            ('审计日志',s/'audit.jsonl'),
+           ('版本查询状态',s/'latest-query.json'),('上次稳定版查询提示（仅用于显示）',s/'latest-stable'),
            ('管理锁',s/'manager.lock'),('状态目录',s),('运行数据',d),
            ('管理脚本历史备份',s/'manager-backups'),('脚本升级恢复标记',s/'manager-update-pending.json'),
            ('GitHub 升级源',s/'update-source.json'),('GitHub 私有仓库只读令牌',s/'github-token'),

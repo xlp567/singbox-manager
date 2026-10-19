@@ -1,4 +1,4 @@
-# singbox-manager v3.5.1
+# singbox-manager v3.5.2
 
 Debian / Ubuntu 的中文 sing-box 多节点管理器。保留原有 27 项管理功能与九种协议，增加官方协议自动表单、草稿永久清理、文件目录速查，以及管理脚本的本地上传 / GitHub 升级和回退。
 
@@ -6,6 +6,7 @@ Debian / Ubuntu 的中文 sing-box 多节点管理器。保留原有 27 项管�
 - 官方 Runtime 下载与 SHA-256 校验、完整快照、事务自动回滚和中断恢复。
 - 核心升级后可扫描 `sing-box schema` 发现新协议，通过参数表单创建节点，无需填写 JSON。复杂新拓扑仍需要专用适配。
 - 自升级只更新 `/root/singbox-manager.sh` 与 `/usr/local/bin/sbm`，不改变节点配置、不重启代理服务。
+- 官方版本查询使用小分页及稳定版独立接口，处理 HTTP 504、超时和限流；失败时保留当前服务，并明确标记查询状态，不把旧缓存当作最新结果。
 
 ## 使用
 

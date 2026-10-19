@@ -47,11 +47,18 @@ fetch_versions() {
     arch=$(dpkg --print-architecture)
     case $arch in amd64|arm64|386|s390x|riscv64|loong64) ;; armhf) arch=armv7;; armel) arch=armv6;; *) die "暂不支持架构 ${arch}；不猜测二进制型号。";; esac
     say '实时查询 SagerNet 官方 GitHub 发布版本（网络失败不会改动现有程序）……'
-    curl --proto '=https' --tlsv1.2 -fsSL --retry 2 --connect-timeout 10 --max-time 60 \
-        -H 'Accept: application/vnd.github+json' 'https://api.github.com/repos/SagerNet/sing-box/releases?per_page=100' -o "$TMP/releases.json"
-    engine releases "$TMP/releases.json" "$TMP/catalog.json" "$arch"
+    rm -f -- "$TMP/catalog.json" "$TMP/selected.json"
+    if ! engine fetch-releases "$TMP/releases.json" "$TMP/release-query.json" "${1:-full}"; then
+        engine release-query-status "$STATE" failed || true
+        say '本次查询未成功，无法判断是否有新版本；当前运行程序、配置和服务保持原状。' >&2
+        return 1
+    fi
+    if ! engine releases "$TMP/releases.json" "$TMP/catalog.json" "$arch" "$TMP/release-query.json"; then
+        engine release-query-status "$STATE" failed || true
+        return 1
+    fi
     # Cached only for the dashboard hint; selecting a version always uses this fresh query.
-    printf '%s %s\n' "$(engine get "$TMP/catalog.json" stable.version)" "$(date -u +%F)" >"$STATE/latest-stable" || true
+    engine release-query-status "$STATE" success "$TMP/catalog.json" || true
 }
 current_version() {
     local b

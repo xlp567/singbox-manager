@@ -10,7 +10,7 @@ parser=argparse.ArgumentParser();parser.add_argument('--output',required=True);a
 files=[]
 for name in ['README.md','使用说明.md','架构与扩展.md','自定义协议模块.md','测试与部署结果.md','文件目录速查.md','管理脚本升级.md',
              'singbox-manager.sh','singbox-manager.sha256','.gitignore','src','tools','tests','examples',
-             '2.4版本备份/singbox-manager.sh','3.0版本备份/singbox-manager.sh','reports/v3.5.1']:
+             '2.4版本备份/singbox-manager.sh','3.0版本备份/singbox-manager.sh','reports/v3.5.1','reports/v3.5.2']:
     base=ROOT/name
     for p in sorted(base.rglob('*')) if base.is_dir() else [base]:
         if not p.is_file() or p.is_symlink() or '__pycache__' in p.parts or p.suffix=='.pyc' or p.name=='.DS_Store' or p.name.startswith('._'):continue

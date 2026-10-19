@@ -32,7 +32,8 @@ def build():
     path.chmod(0o755)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     (ROOT / 'singbox-manager.sha256').write_text(digest + '  singbox-manager.sh\n')
-    print(f'Built v3.5.1: {len(result.encode())} bytes, SHA-256 {digest}')
+    version=re.search(r'^SBM_VERSION=([0-9.]+)$',core,re.M)[1]
+    print(f'Built v{version}: {len(result.encode())} bytes, SHA-256 {digest}')
 
 
 if __name__ == '__main__':
