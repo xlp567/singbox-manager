@@ -12,6 +12,7 @@ from common import ROOT
 
 sys.path.insert(0,str(ROOT/'tools'))
 from privacy_guard import check_manifest, scan_text
+from audit_publication import scan_payload,scan_git
 
 
 class PrivacyGuard(unittest.TestCase):
@@ -45,6 +46,13 @@ class PrivacyGuard(unittest.TestCase):
         self.assertTrue(self.scan('https://'+'private-node'+'.internal-domain.net/path'))
         self.assertEqual(self.scan('https://api.github.com/repos/x/y https://node.example.com'),[])
         self.assertTrue(self.scan(json.dumps({'server_name':'private-node'+'.internal-domain.net'})))
+
+    def test_bare_node_domain_is_blocked_without_private_list(self):
+        host='.'.join(['private-node','fixture-domain','cloud'])
+        result=self.scan('node: '+host)
+        self.assertTrue(any(item['category']=='unreviewed-bare-host' for item in result))
+        self.assertNotIn(host,json.dumps(result))
+        self.assertEqual(self.scan('node.example.com engine.new_model manager.json'),[])
 
     def test_extra_private_values_and_base64_are_blocked(self):
         private='test-fixture-credential'
@@ -81,3 +89,21 @@ class PrivacyGuard(unittest.TestCase):
             subprocess.run([sys.executable,str(ROOT/'tools/prepare_github.py'),'--output',str(out)],check=True,capture_output=True)
             files=json.loads(out.read_text());self.assertEqual(check_manifest(files),[])
             self.assertEqual([f['path'] for f in files if f['path'].startswith('reports/')],['reports/PUBLIC_VALIDATION.md'])
+
+    def test_downloaded_archive_is_scanned_without_extracting(self):
+        output=io.BytesIO()
+        with zipfile.ZipFile(output,'w') as archive:
+            archive.writestr('source/README.md','node='+'.'.join(map(str,[11,22,33,44])))
+        result=scan_payload('release.zip',output.getvalue())
+        self.assertTrue(result);self.assertIn('::source/README.md',result[0]['path'])
+
+    def test_git_audit_checks_old_reachable_blobs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p=pathlib.Path(folder)
+            def git(*args):return subprocess.check_output(['git','-C',str(p),*args],stderr=subprocess.DEVNULL)
+            git('init');git('config','user.name','Test');git('config','user.email','test@example.com')
+            (p/'README.md').write_text('node='+'.'.join(map(str,[11,22,33,44])))
+            git('add','README.md');git('commit','-m','fixture')
+            (p/'README.md').write_text('safe documentation');git('add','README.md');git('commit','-m','clean')
+            stats,findings=scan_git(p/'.git')
+            self.assertEqual(stats['commits'],2);self.assertTrue(findings)

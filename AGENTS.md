@@ -1,6 +1,7 @@
 # Repository maintenance instructions
 
 - 每次发布新版本，必须同步本地源码、GitHub 默认分支与正式 GitHub Release；仅提交源码不算完成发布。
+- 安装 / 升级只跟踪正式稳定 Release；发布需使用固定公钥对应私钥签署 SHA256SUMS，并上传签名和安装入口。私钥不得进入仓库、下载包、日志或 VPS；确认前不得执行候选脚本。
 - Release 的标签和标题都只使用 `v<版本号>`（例如 `v3.5.4`），标题不添加宣传语或双语副标题；中英文更新说明放在正文，并附完整源码包、独立 `singbox-manager.sh`、配套 `singbox-manager.sha256` 和 `SHA256SUMS`。
 - 发布前执行与变更相关的检查；发布后匿名读回附件并核对版本、标签提交、文件清单和 SHA-256。具体步骤见 `RELEASING.md`。
 - GitHub 发布与服务器部署分别记录。服务器操作仅限用户明确授权的练手 VPS；不得修改其他生产 VPS，不得影响 3X-UI / Xray。

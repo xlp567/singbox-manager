@@ -1,7 +1,93 @@
 """Durable storage, backup integrity and transaction markers."""
 import hashlib, json, os, pathlib, sys, shutil, datetime, uuid, re
+import errno, tempfile, time
 
 RUNTIME_LIBRARIES=('libcronet.so','libcronet.dylib','libcronet.dll')
+AUTO_BACKUPS=10
+
+
+def runtime_backup(binary,destination,pool):
+    """One immutable private copy per digest; snapshots retain portable hard links."""
+    binary=pathlib.Path(binary).resolve();destination=pathlib.Path(destination);pool=pathlib.Path(pool)
+    if pool.is_symlink():fail('运行文件对象目录不得为符号链接')
+    pool.mkdir(mode=0o700,exist_ok=True);identity=runtime_identity(binary);target=pool/identity
+    if target.is_symlink():fail('运行文件对象不得为符号链接')
+    if not target.exists():
+        temporary=pathlib.Path(tempfile.mkdtemp(prefix='.object-',dir=pool))
+        try:
+            shutil.copyfile(binary,temporary/'runtime.bin');os.chmod(temporary/'runtime.bin',0o700)
+            runtime_copy_libraries(binary,temporary/'runtime-libs')
+            if runtime_identity(temporary/'runtime.bin',temporary/'runtime-libs')!=identity:fail('备份期间运行文件发生变化')
+            backup_seal(temporary);backup_complete(temporary)
+            os.replace(temporary,target);sync_directory(pool)
+        finally:
+            if temporary.exists():shutil.rmtree(temporary)
+    backup_verify(target)
+    if runtime_identity(target/'runtime.bin',target/'runtime-libs')!=identity:fail('运行文件对象摘要不符')
+    (destination/'runtime-libs').mkdir(mode=0o700,exist_ok=True)
+    for source in [target/'runtime.bin',*(target/'runtime-libs').iterdir()]:
+        dest=destination/('runtime.bin' if source.name=='runtime.bin' else 'runtime-libs/'+source.name)
+        try:os.link(source,dest)
+        except OSError as error:
+            if error.errno!=errno.EXDEV:raise
+            shutil.copyfile(source,dest);os.chmod(dest,source.stat().st_mode&0o777)
+
+
+def snapshot_kind(root,kind):
+    if kind not in {'manual','automatic'}:fail('备份类型无效')
+    save(pathlib.Path(root)/'backup-kind.json',{'format':1,'kind':kind,'created_ns':time.time_ns()})
+
+
+def runtime_gc(pool):
+    pool=pathlib.Path(pool);removed=0
+    if pool.is_symlink():fail('运行文件对象目录不得为符号链接')
+    if not pool.exists():return 0
+    for directory in pool.iterdir():
+        if directory.is_symlink() or not directory.is_dir() or not re.fullmatch(r'[a-f0-9]{64}',directory.name):continue
+        files=[p for p in directory.rglob('*') if p.is_file() and not p.is_symlink()]
+        if files and all(p.stat().st_nlink==1 for p in files):shutil.rmtree(directory);removed+=1
+    sync_directory(pool);return removed
+
+
+def prune_automatic(backups,pool,pending,keep=AUTO_BACKUPS):
+    root=pathlib.Path(backups);marker=pathlib.Path(pending)
+    protected=marker.read_text().strip() if marker.is_file() and not marker.is_symlink() else ''
+    automatic=[]
+    for directory in root.iterdir():
+        if directory.is_symlink() or not directory.is_dir() or not (directory/'.complete').is_file():continue
+        kind=directory/'backup-kind.json'
+        if not kind.is_file() or kind.is_symlink():continue
+        try:
+            data=json.loads(kind.read_text())
+            if data.get('format')==1 and data.get('kind')=='automatic' and type(data.get('created_ns')) is int:
+                automatic.append((data['created_ns'],directory))
+        except (ValueError,OSError):continue
+    automatic.sort(key=lambda row:row[0],reverse=True);removed=0
+    for _,directory in automatic[int(keep):]:
+        if str(directory)==protected:continue
+        shutil.rmtree(directory);removed+=1
+    sync_directory(root);runtime_gc(pool);return removed
+
+
+def snapshot_space(backups,pool,config,exports,binary=''):
+    def size(path):
+        root=pathlib.Path(path)
+        if not root.exists():return 0
+        if root.is_file():return root.stat().st_size
+        return sum(p.stat().st_size for p in root.rglob('*') if p.is_file() and not p.is_symlink())
+    state=pathlib.Path(pool).parent
+    needed=size(config)+size(exports)+size(state/'protocols')+size(state/'client-info.txt')+8*1024*1024
+    runtime_size=0;pool_needed=0;pool=pathlib.Path(pool)
+    if binary:
+        p=pathlib.Path(binary).resolve()
+        runtime_size=p.stat().st_size+sum((p.parent/name).stat().st_size for name in RUNTIME_LIBRARIES if (p.parent/name).is_file())
+        if not (pool/runtime_identity(binary)).is_dir():pool_needed=runtime_size
+    state=pool.parent
+    if state.stat().st_dev==pathlib.Path(backups).stat().st_dev:needed+=pool_needed
+    else:
+        needed+=runtime_size
+        if shutil.disk_usage(state).free<pool_needed+8*1024*1024:fail('运行文件对象目录空间不足；请先用菜单 24 清理')
+    if shutil.disk_usage(backups).free<needed:fail('本次备份空间不足（按实际新增数据估算）；请先用菜单 24 清理')
 
 def file_digest(path):
     h=hashlib.sha256()

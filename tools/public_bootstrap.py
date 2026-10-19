@@ -1,11 +1,12 @@
-"""Anonymous GitHub bootstrap. Bundled into install.sh; no credential prompt."""
-import base64
-import hashlib
+"""Signed formal-Release bootstrap; execution follows verification and consent."""
 import json
+import pathlib
 import re
 import sys
+import tempfile
 import urllib.error
 import urllib.request
+from sbm.core.release_trust import download_release,asset_bytes
 
 API='https://api.github.com/repos/xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -15,12 +16,13 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):raise ValueError('安装接口返回跳转，已停止')
 
 
-def read(path):
-    if not re.fullmatch(r'/commits/main|/contents/install\.py\?ref=[a-f0-9]{40}',path):raise ValueError('安装路径无效')
+def read(path,token=''):
+    if not re.fullmatch(r'/releases/latest|/git/ref/tags/v\d+\.\d+\.\d+|/git/tags/[a-f0-9]{40}',path):raise ValueError('安装路径无效')
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-public-install','X-GitHub-Api-Version':'2022-11-28'}
+    if token:headers['Authorization']='Bearer '+token
     try:
         with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path,headers=headers),timeout=25) as response:data=response.read(LIMIT+1)
-    except urllib.error.HTTPError as error:raise ValueError('GitHub HTTP '+str(error.code)+'；请确认仓库已公开，或稍后重试') from None
+    except urllib.error.HTTPError as error:raise ValueError('GitHub HTTP '+str(error.code)+'；请确认仓库访问权限，或稍后重试') from None
     except (urllib.error.URLError,TimeoutError):raise ValueError('无法连接 GitHub，请稍后重试') from None
     if len(data)>LIMIT:raise ValueError('安装响应过大')
     value=json.loads(data)
@@ -28,14 +30,22 @@ def read(path):
     return value
 
 
-def launch():
-    commit=read('/commits/main').get('sha','')
-    if not re.fullmatch(r'[a-f0-9]{40}',commit):raise ValueError('GitHub 提交标识无效')
-    item=read('/contents/install.py?ref='+commit)
-    if item.get('type')!='file' or item.get('encoding')!='base64' or not isinstance(item.get('size'),int) or not 0<=item['size']<=LIMIT:raise ValueError('安装文件格式异常')
-    data=base64.b64decode(''.join(item['content'].split()),validate=True)
-    if len(data)!=item['size'] or hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()!=item.get('sha'):raise ValueError('安装文件内容摘要不符')
-    exec(compile(data,'<verified public GitHub installer>','exec'),{'__name__':'__main__','BOOTSTRAP_TOKEN':'','BOOTSTRAP_COMMIT':commit})
+def consent(tag):
+    print('正式 Release '+tag+' 的安装器签名已通过固定公钥验证。')
+    print('将安装管理器并打开菜单；不创建节点，不重启已有代理服务。')
+    with open('/dev/tty','r+') as terminal:
+        terminal.write('输入 yes 安装并运行已验证的安装器，其他输入取消: ');terminal.flush()
+        return terminal.readline().strip().lower()=='yes'
+
+
+def launch(token=''):
+    with tempfile.TemporaryDirectory(prefix='sbm-bootstrap-') as folder:
+        release=read('/releases/latest',token)
+        origin=download_release(API,folder,('install.py',),lambda url,t:read(url[len(API):],t),asset_bytes,token,release=release)
+        if not consent(origin['tag']):print('已取消，未执行下载的代码。');return
+        data=(pathlib.Path(folder)/'install.py').read_bytes()
+        exec(compile(data,'<signed formal Release installer>','exec'),
+             {'__name__':'__main__','BOOTSTRAP_TOKEN':token,'BOOTSTRAP_RELEASE':release,'BOOTSTRAP_CONFIRMED':True})
 
 
 if __name__=='__main__':

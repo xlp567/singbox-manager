@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from common import engine, model
+from common import engine, model, map_public_origin
 
 
 def free_port(udp=False):
@@ -69,6 +69,7 @@ def main():
                     if kind in engine.TLS_KINDS:out['tls']['certificate_path']=str(p/'cert.pem')
                     cp=free_port();client={'log':{'level':'warn'},'inbounds':[{'type':'mixed','listen':'127.0.0.1','listen_port':cp}],
                         'outbounds':[out],'route':{'final':n['id']}}
+                    map_public_origin(conf,server.server_port)
                     engine.save(p/'server.json',conf);engine.save(p/'client.json',client)
                     for role in ['server','client']:
                         r=subprocess.run([binary,'check','-c',str(p/f'{role}.json')],capture_output=True,text=True)
@@ -80,7 +81,7 @@ def main():
                     wait_tcp(cp,processes[1])
                     if kind not in {'hysteria2','tuic'}:wait_tcp(n['port'],processes[0])
                     r=subprocess.run(['curl','--silent','--show-error','--max-time','25','--retry','2','--retry-delay','1',
-                        '--proxy',f'socks5h://127.0.0.1:{cp}','--noproxy','',f'http://127.0.0.1:{server.server_port}/'],capture_output=True,text=True)
+                        '--proxy',f'socks5h://127.0.0.1:{cp}','--noproxy','','http://public.example/'],capture_output=True,text=True)
                     if r.returncode or r.stdout!='sbm-v3-real-roundtrip\n':
                         raise RuntimeError('proxy request failed: '+r.stderr[-250:])
                     row['roundtrip']='PASS'

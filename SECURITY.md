@@ -6,6 +6,8 @@
 
 本政策适用于 singbox-manager 管理脚本、安装 / 升级入口和协议适配代码。第三方 sing-box 核心及其他程序由各自的上游项目维护。
 
+v3.5.6 增加默认出口保护及签名升级；现有节点必须单独执行 `sbm security apply` 才会迁移路由，管理器自升级不自动重启服务。签名公钥固定在验证器中；首次引导器和旧版首次迁移仍需独立核对信任。详见[用户手册第 12 节](docs/USER_GUIDE.zh-CN.md#12-v356-安全与可靠性)。
+
 ## 私密报告漏洞
 
 请使用 GitHub 的 **Report a vulnerability** 私密报告入口：
@@ -27,6 +29,8 @@
 Security fixes prioritize the latest stable manager release on [Releases](https://github.com/xlp567/singbox-manager/releases/latest). If you use an older version, check whether the issue still exists in the latest stable release. Separate security backports are not promised for every historical version.
 
 This policy covers the manager, installation/update entry points and protocol adapters. Third-party sing-box runtime and other programs are maintained by their respective upstream projects.
+
+v3.5.6 adds default egress protection and signed updates. Existing nodes require a separate `sbm security apply` transaction; manager updates do not restart services. The verifier pins the release public key; independently establish trust for the first bootstrap or migration from an unsigned old manager. See [guide section 12](docs/USER_GUIDE.en.md#12-v356-security-and-reliability).
 
 ## Reporting a vulnerability
 

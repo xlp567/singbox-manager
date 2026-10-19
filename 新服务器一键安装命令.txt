@@ -1,1 +1,1 @@
-bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/install.sh)
+bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)

@@ -21,11 +21,15 @@ class Compatibility(unittest.TestCase):
         self.old = legacy_engine()
 
     def test_all_nine_server_templates_exact_v24(self):
-        self.assertEqual(e.compile_config(self.m), self.old.compile_config(self.m))
+        def same_protocols(new,old):
+            self.assertIn('rules',new['route'])
+            new=copy.deepcopy(new);new.pop('dns');new['route']={'final':'direct'}
+            self.assertEqual(new,old)
+        same_protocols(e.compile_config(self.m), self.old.compile_config(self.m))
         for node in self.m['nodes']:
             with self.subTest(kind=node['kind']):
                 m = copy.deepcopy(self.m); m['nodes'] = [node]
-                self.assertEqual(e.compile_config(m), self.old.compile_config(m))
+                same_protocols(e.compile_config(m), self.old.compile_config(m))
 
     def test_all_nine_client_configs_and_uris_exact_v24(self):
         for n in self.m['nodes']:
@@ -43,15 +47,18 @@ class Compatibility(unittest.TestCase):
 
     def test_disabled_and_empty_models(self):
         for n in self.m['nodes']: n['enabled'] = False
-        self.assertEqual(e.compile_config(self.m), self.old.compile_config(self.m))
+        new=e.compile_config(self.m);new.pop('dns');new['route']={'final':'direct'}
+        self.assertEqual(new, self.old.compile_config(self.m))
         self.assertEqual(e.ports(self.m), [])
-        self.assertEqual(e.compile_config(e.new_model()), self.old.compile_config(self.old.new_model()))
+        new=e.compile_config(e.new_model());new.pop('dns');new['route']={'final':'direct'}
+        self.assertEqual(new, self.old.compile_config(self.old.new_model()))
 
     def test_v1_migration_exact_roundtrip(self):
         self.m['nodes'] = [n for n in self.m['nodes'] if n['kind'] in {'anytls','hysteria2'}]
         with tempfile.TemporaryDirectory() as td:
             p = pathlib.Path(td)/'config.json'; e.save(p, self.old.compile_config(self.m))
-            self.assertEqual(e.compile_config(e.import_v1(p)), e.load(p))
+            migrated=e.import_v1(p);self.assertEqual(e.compile_config(migrated)['inbounds'],e.load(p)['inbounds'])
+            self.assertIn('rules',e.compile_config(migrated)['route'])
             c = e.load(p); c['route']['rules'] = []; e.save(p,c)
             with self.assertRaises(ValueError): e.import_v1(p)
 

@@ -4,19 +4,19 @@
 
 [简体中文](README.md) · English · [English user guide](docs/USER_GUIDE.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md)
 
-![Version](https://img.shields.io/badge/version-3.5.5-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.5.6-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
-[Official project releases and downloads](https://github.com/xlp567/singbox-manager/releases/latest) include the full source package, standalone manager and SHA-256 checksums.
+[Official project releases and downloads](https://github.com/xlp567/singbox-manager/releases/latest) include source, the standalone manager, installation entries, SHA-256 manifest and Ed25519 signature.
 
 ## Quick start
 
 Log in to a new **Debian / Ubuntu VPS** as root and run:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/install.sh)
+bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)
 ```
 
-The public repository requires **no GitHub account or token**. The installer prepares Python 3, CA certificates and util-linux when needed, verifies the release, and asks for `yes` before installing the manager. It opens `sbm`; choose **1** to configure your first node. The interactive menu is currently in Chinese; this guide explains the numbered actions in English.
+The public repository requires **no GitHub account or token**. The installer prepares Python 3, CA certificates, util-linux and an OpenSSH client when needed, verifies the release, and asks for `yes` before installing the manager. It opens `sbm`; choose **1** to configure your first node. The interactive menu is currently in Chinese; this guide explains the numbered actions in English.
 
 For a non-root account, run `sudo -i` first. If curl is missing, install it with `apt-get update && apt-get install -y curl ca-certificates`. Bash 4+, a running systemd, and access to GitHub and official SagerNet downloads are required. Configure your firewall and certificate-validation ports for your own environment.
 
@@ -34,7 +34,7 @@ Already installed? Use **menu 30 → 2** or `sbm self-update github`. **Manager 
 | Drafts and paths | Resume, archive or permanently purge drafts; inspect actual paths in menu 29 |
 | Manager delivery | Public GitHub updates, SSH uploads, and manager rollback |
 
-The original 27 menu numbers remain unchanged. Additional entries are **28 protocol discovery**, **29 file locations**, and **30 manager updates**. Installing or updating the manager does not change node configurations, restart sing-box, or control 3X-UI / Xray. Node changes and runtime changes are separate confirmed operations.
+The original 27 menu numbers remain unchanged. Additional entries are **28 protocol discovery**, **29 file locations**, **30 manager updates**, and **31 egress security**. Installing or updating the manager does not change node configurations, restart sing-box, or control 3X-UI / Xray. Node changes and runtime changes are separate confirmed operations.
 
 ## Built-in protocols
 
@@ -80,7 +80,7 @@ bash tools/test.sh         # Rebuild, then run syntax checks, ShellCheck and tes
 python3 tools/package.py   # Package source, documentation and published test evidence
 ```
 
-Run these commands from a complete source checkout. Building uses the Python 3 standard library; full validation also requires Bash and ShellCheck. Build outputs are `singbox-manager.sh`, `singbox-manager.sha256`, `install.sh` and `新服务器一键安装命令.txt`; building does not install or start VPS services. Unit tests use temporary directories and service substitutes; actual protocol transfers and deployment checks are recorded separately.
+Run these commands from a complete source checkout. Building uses the Python 3 standard library; full validation also requires Bash, ShellCheck, Git and OpenSSH. Build outputs are `singbox-manager.sh`, `singbox-manager.sha256`, `install.py`, `install.sh` and `新服务器一键安装命令.txt`; building does not install or start VPS services. Unit tests use temporary directories and service substitutes; actual protocol transfers and deployment checks are recorded separately.
 
 Publish source, version, documentation and test evidence together; read back the GitHub files to verify consistency. VPS configurations, credentials, certificates, runtime caches and machine backups do not belong in the repository. Downloads and queries can fail during GitHub or network outages; the running version is preserved.
 
@@ -88,7 +88,11 @@ Publish source, version, documentation and test evidence together; read back the
 
 [MIT](LICENSE) for this manager and original repository code. SagerNet sing-box and other third-party programs retain their own licenses. This is an independent project, not an official SagerNet management tool.
 
-## v3.5.5 service control and publication privacy
+## v3.5.6 security and reliability
+
+New configurations block proxy access to loopback, private/link-local/metadata destinations and the host's interface addresses, including DNS-resolved destinations. After updating an existing manager, separately choose **31 → 1** or run `sbm security apply`. It backs up, asks for confirmation and briefly restarts sing-box. Updating the manager alone preserves existing routes.
+
+Corrupt audit records warn without blocking operations; `sbm audit repair` preserves the original and links a new chain. Runtime backups are deduplicated; successful transactions retain the latest 10 automatic snapshots, while manual and legacy backups remain. Installation and updates use the latest formal Release, a pinned Ed25519 public key and static checks before consent. See [guide section 12](docs/USER_GUIDE.en.md#12-v356-security-and-reliability) for signature and first-install trust boundaries.
 
 Menu actions **15 / 16 / 17** share transactional service control. Stop takes a backup, verifies inactive state and process exit over an observation window, and restores the previous state on failure or interruption. Invalid configuration or a missing runtime does not block stopping.
 

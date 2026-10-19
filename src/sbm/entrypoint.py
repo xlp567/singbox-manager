@@ -17,7 +17,11 @@ def main():
     if command=='manager-update':
         from .core.self_update import command as update_command
         return update_command(args)
-    commands={'backup-seal':storage.backup_seal,'backup-verify':storage.backup_verify,
+    if command=='audit-repair':print(json.dumps(audit.repair(args[0]),ensure_ascii=False));return
+    commands={'runtime-backup':storage.runtime_backup,'snapshot-kind':storage.snapshot_kind,
+              'prune-automatic':storage.prune_automatic,'snapshot-space':storage.snapshot_space,
+              'runtime-gc':storage.runtime_gc,
+              'backup-seal':storage.backup_seal,'backup-verify':storage.backup_verify,
               'backup-complete':storage.backup_complete,'pending-write':storage.pending_write,
               'pending-clear':storage.pending_clear,'runtime-copy-libs':storage.runtime_copy_libraries,
               'audit-append':audit.append}

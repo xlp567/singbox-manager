@@ -9,6 +9,9 @@ sys.path.insert(0, str(ROOT / 'src'))
 from sbm import engine
 
 
+from wire_fixture import map_public_origin
+
+
 def legacy_engine():
     source = (ROOT / '2.4版本备份/singbox-manager.sh').read_text()
     python = source.split("    cat <<'PY_ENGINE'\n", 1)[1].split('\nPY_ENGINE', 1)[0]

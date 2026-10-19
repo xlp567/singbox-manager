@@ -6,6 +6,7 @@ from .protocols import ADAPTERS, get as protocol
 from .protocols.base import METHODS
 from .adapter_engine import PROTOCOL_ENGINE
 from .core import audit
+from .core import network_policy
 from .core.storage import save, sync_directory, backup_inventory, backup_seal, backup_verify, pending_write, pending_clear, backup_complete, runtime_identity, runtime_copy_libraries, RUNTIME_LIBRARIES
 from .runtime import Runtime
 KINDS = [(a.kind, a.label, a.default_port) for a in ADAPTERS.values()]
@@ -203,6 +204,7 @@ def networks(n):
     return list(protocol(n['kind']).networks)
 
 def validation(m):
+    network_policy.validate(m)
     if m.get('schema')!=2: fail('不支持的管理数据格式')
     if not isinstance(m.get('nodes'),list): fail('节点列表无效')
     if m.get('log_level','info') not in {'trace','debug','info','warn','error','fatal','panic'}: fail('日志等级无效')
@@ -279,8 +281,10 @@ def preflight(m):
     print('端口预检通过（sing-box 自身占用的端口会在切换时释放）。')
 
 def verify_dns(m):
+    local_addresses=network_policy.collect_local()
     names={n['server'] for n in m['nodes'] if n['enabled']}
-    if not names: return
+    if not names:
+        network_policy.stamp(m,local_addresses);return
     public=set()
     for family,url in [(socket.AF_INET,'https://api.ipify.org'),(socket.AF_INET6,'https://api6.ipify.org')]:
         try:
@@ -307,6 +311,7 @@ def verify_dns(m):
     m['listen']='::' if has6 else '0.0.0.0' 
     if has6:
         if subprocess.check_output(['sysctl','-n','net.ipv6.bindv6only'],text=True).strip()!='0': fail('bindv6only 必须为 0，才能使用双栈监听')
+    network_policy.stamp(m,local_addresses|{str(address) for address in public})
 
 def import_v1(path):
     c=load(path); m=new_model()
@@ -326,7 +331,7 @@ def import_v1(path):
         if k=='hysteria2': n.update({'obfs':x['obfs']['password'],'bbr':x.get('bbr_profile','standard')})
         m['nodes'].append(n); m['listen']=x['listen']
     # Exact round trip rejects hand-added routing, users, TLS and other unknown fields.
-    if compile_config(m)!=c: fail('旧配置有自定义字段或不同默认值；拒绝覆盖，请人工迁移')
+    if not network_policy.matches(m,c,compile_config(m)): fail('旧配置有自定义字段或不同默认值；拒绝覆盖，请人工迁移')
     return m
 
 def releases(source,out,arch,metadata=None):
@@ -712,7 +717,15 @@ def main():
     if cmd=='count':
         print(f"{sum(n['enabled'] for n in m['nodes'])}/{len(m['nodes'])}"); return
     if cmd=='verify-generated':
-        if compile_config(m)!=load(args[1]): fail('检测到 config.json 在脚本外被修改。为保护自定义配置，暂停改动；请先备份并处理差异')
+        if not network_policy.matches(m,load(args[1]),compile_config(m)): fail('检测到 config.json 在脚本外被修改。为保护自定义配置，暂停改动；请先备份并处理差异')
+        return
+    if cmd=='security-status':
+        report=network_policy.status(m,load(args[1]),compile_config(m))
+        if '--json' in args[2:]:print(json.dumps(report))
+        else:
+            print('出口安全：'+('已应用' if report['applied'] else '尚未应用；请使用菜单 31 或 sbm security apply'))
+            print('拒绝本机、内网、链路本地和元数据地址；域名解析后再次检查。')
+            print('本机地址变化后需重新应用；管理器自升级不会改变正在运行的配置。')
         return
     if cmd=='acme': acme_prompt(m,True)
     elif cmd=='loglevel': m['log_level']=['info','warn','debug'][choose('日志等级（debug 可能包含访问详情）',['info','warn','debug'])]

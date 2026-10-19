@@ -32,11 +32,24 @@ ssh "${options[@]}" -n -p "$port" "$target" 'test "$(id -u)" = 0 && test "$(unam
 nonce=$(python3 -c 'import secrets;print(secrets.token_hex(8))')
 candidate=/root/singbox-manager-upload-$nonce.sh
 checksum=/root/singbox-manager-upload-$nonce.sha256
+manifest=/root/singbox-manager-upload-$nonce.SHA256SUMS
+signature=$manifest.sig
+version=$(sed -n 's/^SBM_VERSION=//p' "$PROJECT/singbox-manager.sh")
+release=$PROJECT/dist/release-v$version
+[[ -f $release/SHA256SUMS && -f $release/SHA256SUMS.sig ]] || { printf '%s\n' '请先准备已签名的正式发布包。' >&2; exit 1; }
+PYTHONPATH="$PROJECT/src" python3 - "$release" "$PROJECT/singbox-manager.sh" <<'PY_SIGN'
+import hashlib,pathlib,sys
+from sbm.core.release_trust import verify_directory
+release=pathlib.Path(sys.argv[1]);verify_directory(release)
+if (release/'singbox-manager.sh').read_bytes()!=pathlib.Path(sys.argv[2]).read_bytes():raise SystemExit('本地管理器与签名发布包不一致，未执行远端候选脚本')
+PY_SIGN
 scp "${options[@]}" -P "$port" "$PROJECT/singbox-manager.sh" "$target:$candidate"
 scp "${options[@]}" -P "$port" "$PROJECT/singbox-manager.sha256" "$target:$checksum"
+scp "${options[@]}" -P "$port" "$release/SHA256SUMS" "$target:$manifest"
+scp "${options[@]}" -P "$port" "$release/SHA256SUMS.sig" "$target:$signature"
 # Nonce is generated locally and consists only of hexadecimal characters.
 ssh "${options[@]}" -tt -p "$port" "$target" "bash $candidate self-update local $candidate"
 actual=$(ssh "${options[@]}" -n -p "$port" "$target" 'sha256sum /usr/local/bin/sbm' | awk '{print $1}')
 [[ $actual == "$expected" ]] || { printf '%s\n' '未安装所上传版本（可能已取消）；保留候选文件供核查。' >&2; exit 1; }
-ssh "${options[@]}" -n -p "$port" "$target" "rm -f -- $candidate $checksum"
+ssh "${options[@]}" -n -p "$port" "$target" "rm -f -- $candidate $checksum $manifest $signature"
 printf '%s\n' 'SSH 上传与管理脚本升级成功；远端摘要一致。'

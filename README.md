@@ -4,19 +4,19 @@
 
 简体中文 · [English](README.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md) · [English guide](docs/USER_GUIDE.en.md)
 
-![Version](https://img.shields.io/badge/version-3.5.5-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.5.6-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
-[正式版本与下载附件](https://github.com/xlp567/singbox-manager/releases/latest)：包含完整源码包、独立管理脚本及 SHA-256 校验文件。
+[正式版本与下载附件](https://github.com/xlp567/singbox-manager/releases/latest)：包含完整源码包、独立管理脚本、安装入口、SHA-256 清单及 Ed25519 签名。
 
 ## 快速开始
 
 在新的 **Debian / Ubuntu VPS** 上用 root 登录 SSH，执行：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/install.sh)
+bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)
 ```
 
-公开仓库，**无需 GitHub 账号或令牌**。安装器按需准备 Python 3、CA 证书和 util-linux，显示已校验的版本；输入 `yes` 安装管理器并打开菜单，选择 **1** 配置第一个节点。
+公开仓库，**无需 GitHub 账号或令牌**。安装器按需准备 Python 3、CA 证书、util-linux 和 OpenSSH 客户端，显示已校验的版本；输入 `yes` 安装管理器并打开菜单，选择 **1** 配置第一个节点。
 
 普通用户先运行 `sudo -i`。若系统尚无 curl，先运行 `apt-get update && apt-get install -y curl ca-certificates`。要求 Bash 4+、运行中的 systemd 和可访问的 GitHub / SagerNet 官方下载源。节点监听端口和证书验证端口需由管理员按实际环境放行。
 
@@ -34,7 +34,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/
 | 草稿和文件 | 草稿继续 / 归档 / 永久删除；菜单 29 查看实际路径 |
 | 管理器升级 | GitHub 拉取、SSH 上传安装、历史脚本回退 |
 
-原 27 项菜单保持编号，新增 **28 协议发现**、**29 文件目录**、**30 管理器升级**。管理器安装和自升级不修改节点配置、不重启 sing-box，也不控制 3X-UI / Xray。创建节点、切换核心或修改服务配置是单独确认的操作。
+原 27 项菜单保持编号，新增 **28 协议发现**、**29 文件目录**、**30 管理器升级**、**31 出口安全策略**。管理器安装和自升级不修改节点配置、不重启 sing-box，也不控制 3X-UI / Xray。创建节点、切换核心或修改服务配置是单独确认的操作。
 
 ## 内置协议
 
@@ -81,7 +81,7 @@ bash tools/test.sh         # 重新构建，再执行语法、ShellCheck 和自�
 python3 tools/package.py   # 打包完整源码、文档和已发布的验证记录
 ```
 
-在完整源码目录中执行以上命令。构建使用 Python 3 标准库；完整验证还需要 Bash 和 ShellCheck。构建生成 `singbox-manager.sh`、`singbox-manager.sha256`、`install.sh` 和 `新服务器一键安装命令.txt`，不会安装或启动 VPS 服务。单元测试使用临时目录和服务替身；真实协议传输与部署验证另行记录，不能用模拟测试替代公网验收。
+在完整源码目录中执行以上命令。构建使用 Python 3 标准库；完整验证还需要 Bash、ShellCheck、Git 和 OpenSSH。构建生成 `singbox-manager.sh`、`singbox-manager.sha256`、`install.py`、`install.sh` 和 `新服务器一键安装命令.txt`，不会安装或启动 VPS 服务。单元测试使用临时目录和服务替身；真实协议传输与部署验证另行记录，不能用模拟测试替代公网验收。
 
 每次发布同步本地源码、版本、文档、测试结果和 GitHub，并读回核对发布文件。VPS 配置、证书、凭据、下载缓存和整机备份不属于仓库内容。GitHub 或网络不可达时下载 / 查询会失败，程序保留当前运行版本。
 
@@ -89,7 +89,11 @@ python3 tools/package.py   # 打包完整源码、文档和已发布的验证记
 
 [MIT](LICENSE)。本许可证适用于管理器及本仓库原创代码；SagerNet sing-box 和其他第三方程序遵循各自许可证。本项目不是 SagerNet 官方管理工具。
 
-## v3.5.5 服务控制与发布隐私
+## v3.5.6 安全与可靠性修复
+
+新配置统一阻止代理访问回环、私网、链路本地、元数据服务和本机接口地址；域名先解析再检查。已有配置升级管理器后，需另选 **31 → 1** 或执行 `sbm security apply`，备份、确认并短暂重启 sing-box 后才生效。仅更新管理器不会改变现有路由。
+
+审计损坏改为警告，可用 `sbm audit repair` 保留原文件并续接新链；运行程序备份按摘要去重，成功事务自动保留最近 10 份自动快照，手动及旧版备份保留。安装和升级只接受最新正式 Release 的固定公钥签名，确认前只做静态检查。签名、首次安装信任边界与 SSH 上传说明见[手册第 12 节](docs/USER_GUIDE.zh-CN.md#12-v356-安全与可靠性)。
 
 菜单 **15 / 16 / 17** 共用事务服务入口。停止服务会先备份，再持续确认服务已停止且主进程退出；失败或中断时自动恢复之前状态。配置损坏或运行文件缺失不会阻止停止。
 

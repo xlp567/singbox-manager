@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from .storage import save,sync_directory,file_digest
+from .release_trust import static_script_info,download_release,verify_directory,asset_bytes
 
 DEFAULT_REPOSITORY='xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -32,16 +33,11 @@ def verify(script,checksum):
     data=p.read_bytes()
     if not data.startswith(b'#!/usr/bin/env bash\n# singbox-manager v'):
         raise ValueError('不是本项目发布的管理脚本')
-    check=subprocess.run(['bash','-n',str(p)],capture_output=True,timeout=15)
+    info=static_script_info(data)
+    check=subprocess.run(['bash','--noprofile','--norc','-n',str(p)],capture_output=True,timeout=15,
+                         env={'PATH':os.defpath,'LC_ALL':'C'})
     if check.returncode:raise ValueError('管理脚本 Bash 语法检查失败')
-    # Run only after provenance/checksum checks. No service command is used.
-    result=subprocess.run(['bash',str(p),'version'],capture_output=True,text=True,timeout=15)
-    m=re.fullmatch(r'singbox-manager v(\d+\.\d+(?:\.\d+)?)\s*',result.stdout)
-    if result.returncode or not m:raise ValueError('新版脚本版本自检失败')
-    result=subprocess.run(['bash',str(p),'help'],capture_output=True,text=True,timeout=15)
-    if result.returncode or 'singbox-manager' not in result.stdout or 'upgrade' not in result.stdout:
-        raise ValueError('新版脚本帮助入口自检失败')
-    return {'version':m[1],'sha256':file_digest(p),'bytes':p.stat().st_size}
+    return info
 
 
 def atomic_bytes(path,data,mode=0o700):
@@ -91,7 +87,8 @@ def recover(state,root,shortcut):
     return False
 
 
-def install(script,checksum,state,root,shortcut):
+def install(script,checksum,state,root,shortcut,trusted_rollback=False):
+    if not trusted_rollback:verify_directory(pathlib.Path(script).parent)
     info=verify(script,checksum);data=regular(script).read_bytes();dest=targets(root,shortcut)
     if hashlib.sha256(data).hexdigest()!=info['sha256']:raise ValueError('检查期间候选脚本变化，拒绝安装')
     for p in dest:
@@ -152,10 +149,11 @@ def request_json(url,token=''):
 
 def source(state):
     p=pathlib.Path(state)/'update-source.json'
-    value=json.loads(regular(p).read_text()) if p.exists() else {'repository':DEFAULT_REPOSITORY,'branch':'main'}
-    if set(value)!={'repository','branch'} or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',str(value['repository'])) or not re.fullmatch(r'[A-Za-z0-9_.\/-]{1,100}',str(value['branch'])):
+    value=json.loads(regular(p).read_text()) if p.exists() else {'repository':DEFAULT_REPOSITORY,'channel':'stable'}
+    if set(value) not in ({'repository','branch'},{'repository','channel'}) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',str(value['repository'])):
         raise ValueError('GitHub 升级源配置无效')
-    return value
+    if 'channel' in value and value['channel']!='stable':raise ValueError('仅支持正式 Release 稳定渠道')
+    return {'repository':value['repository'],'channel':'stable'}
 
 
 def rollback_stage(state,backup,root,shortcut,destination):
@@ -175,30 +173,23 @@ def rollback_stage(state,backup,root,shortcut,destination):
     atomic_bytes(dest/'singbox-manager.sha256',(row['sha256']+'  singbox-manager.sh\n').encode(),0o600)
 
 
-def fetch(state,destination):
+def fetch(state,destination,current_version=''):
     config=source(state);token_file=pathlib.Path(state)/'github-token';token=''
     api='https://api.github.com/repos/'+config['repository']
-    commit_url=api+'/commits/'+urllib.parse.quote(config['branch'],safe='')
-    try:commit=request_json(commit_url).get('sha','')
+    latest=api+'/releases/latest'
+    try:release=request_json(latest)
     except GitHubReadError as error:
         if error.status not in {401,403,404} or not token_file.exists():raise
         regular(token_file)
         if token_file.stat().st_mode&0o077:raise ValueError('GitHub 令牌权限必须为 600 或更严格')
         token=token_file.read_text().strip()
         if not re.fullmatch(r'[A-Za-z0-9_]{10,255}',token):raise ValueError('GitHub 令牌格式无效')
-        commit=request_json(commit_url,token).get('sha','')
-    if not re.fullmatch(r'[a-f0-9]{40}',commit):raise ValueError('GitHub 没有返回有效提交标识')
+        release=request_json(latest,token)
     dest=pathlib.Path(destination)
-    for name in ['singbox-manager.sh','singbox-manager.sha256']:
-        item=request_json(api+'/contents/'+name+'?ref='+commit,token)
-        if item.get('type')!='file' or item.get('encoding')!='base64' or item.get('size',LIMIT+1)>LIMIT:
-            raise ValueError('GitHub 发布文件格式异常')
-        try:data=base64.b64decode(''.join(item['content'].split()),validate=True)
-        except (ValueError,KeyError):raise ValueError('GitHub 发布文件编码异常') from None
-        if len(data)>LIMIT:raise ValueError('GitHub 发布文件过大')
-        atomic_bytes(dest/name,data,0o600)
+    origin=download_release(api,dest,('singbox-manager.sh','singbox-manager.sha256'),request_json,
+                            asset_bytes,token,current_version,release)
     report=verify(dest/'singbox-manager.sh',dest/'singbox-manager.sha256')
-    report.update(repository=config['repository'],commit=commit)
+    report.update(repository=config['repository'],**origin)
     return report
 
 
@@ -206,6 +197,8 @@ def command(args):
     op=args[0]
     if op=='verify':print(json.dumps(verify(*args[1:]),ensure_ascii=False));return
     if op=='install':print(json.dumps(install(*args[1:]),ensure_ascii=False));return
+    if op=='install-rollback':print(json.dumps(install(*args[1:],trusted_rollback=True),ensure_ascii=False));return
+    if op=='verify-release':print(verify_directory(args[1]));return
     if op=='fetch':print(json.dumps(fetch(*args[1:]),ensure_ascii=False));return
     if op=='recover':return recover(*args[1:])
     if op=='restore':return restore(*args[1:])
@@ -221,9 +214,9 @@ def command(args):
     if op=='configure':
         state=args[1];old=source(state)
         repository=input('GitHub 仓库 owner/repo ['+old['repository']+']: ').strip() or old['repository']
-        branch=input('升级分支 ['+old['branch']+']: ').strip() or old['branch']
-        value={'repository':repository,'branch':branch}
-        if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',repository) or not re.fullmatch(r'[A-Za-z0-9_.\/-]{1,100}',branch):raise ValueError('仓库或分支格式无效')
+        print('升级渠道：最新正式 Release（固定 stable；不跟踪分支）')
+        value={'repository':repository,'channel':'stable'}
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',repository):raise ValueError('仓库格式无效')
         token=getpass.getpass('私有仓库只读令牌（仅所选仓库 Contents:read；留空保留已有令牌）: ').strip()
         if token and not re.fullmatch(r'[A-Za-z0-9_]{10,255}',token):raise ValueError('令牌格式无效')
         save(pathlib.Path(state)/'update-source.json',value)

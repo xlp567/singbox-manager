@@ -1,5 +1,19 @@
 # Changelog / 更新记录
 
+## 3.5.6 — 2026-10-20
+
+- 所有协议统一加入出口保护，拒绝本机、私网、链路本地和元数据访问；域名解析后再次检查，失败时拒绝。新增菜单 31 / security CLI，以及精确识别旧模板的事务迁移。
+- 审计写入失败只警告；新增 audit repair，隔离原损坏文件并将摘要及最后有效哈希续接到新链。
+- 运行文件快照按摘要去重、硬链接复用；跨文件系统回退复制；自动保留最近 10 份自动快照，手动 / 旧版 / 待恢复备份保留，旧核心清理不影响恢复。
+- 安装 / 自升级改为最新正式 Release、固定 Ed25519 公钥签名及版本绑定清单；确认前静态校验，不执行候选脚本。源码包同步安装入口、公钥、签名和中英文说明。
+- 隐私检查增加常见裸域名识别，以及可达 Git 历史、Release 正文和下载包的只读检查工具；原始测试环境信息仅保存在私有目录。
+
+- Apply shared egress protection across protocols, resolving domains before rejecting private/local/metadata destinations. Add menu 31 / security CLI and exact legacy-template migration through normal transactions.
+- Audit-write failures warn; audit repair preserves the corrupt original and links its digest and last valid hash into a new chain.
+- Deduplicate runtime backup objects with portable snapshot hard links and cross-filesystem copy fallback. Retain 10 automatic snapshots; preserve manual/legacy/pending backups and restore after runtime pruning.
+- Install/update only from the latest formal Release, with pinned Ed25519 signatures, tag-bound manifests and static checks before consent. Include signed bootstrap assets and bilingual documentation.
+- Extend privacy review to common bare domains and provide a read-only history/release audit tool. Keep all raw environment identifiers and evidence private.
+
 ## 3.5.5 — 2026-10-20
 
 - 菜单 16 接入与 15 / 17 相同的服务事务入口：快照、停止状态与主进程检查、失败 / 中断回滚、审计。

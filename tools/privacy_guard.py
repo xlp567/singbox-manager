@@ -15,7 +15,12 @@ V6 = re.compile(r'(?<![\w:])(?:[0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F:.]*(?![\w:])')
 SECRET = re.compile(r'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}')
 BUNDLE = re.compile(r"<<'SBM_BUNDLE'\n([A-Za-z0-9+/=\s]+)\nSBM_BUNDLE")
 DOC_NETS = tuple(ipaddress.ip_network(n) for n in ('192.0.2.0/24','198.51.100.0/24','203.0.113.0/24','2001:db8::/32'))
-PUBLIC_HOSTS = ('github.com','githubusercontent.com','githubassets.com','sagernet.org','sing-box.app','ipify.org','shields.io','json-schema.org','letsencrypt.org','example.com','example.org','example.net','example','invalid','test','localhost')
+PUBLIC_HOSTS = ('anthropic.com','github.com','githubusercontent.com','githubassets.com','sagernet.org','sing-box.app','ipify.org','shields.io','json-schema.org','letsencrypt.org','example.com','example.org','example.net','example','invalid','test','localhost')
+POLICY_NETWORKS={'224.0.0.0/4','ff00::/8','64:ff9b::/96','64:ff9b:1::/48','2002::/16','2001::/32'}
+# Conservative bare-host detection complements structured fields and URLs.
+# It deliberately does not treat Python attributes or arbitrary file suffixes
+# as domains. Private identifiers remain necessary for uncommon/internal names.
+BARE_HOST=re.compile(r'(?<![A-Za-z0-9_.-])(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+(?:com|net|org|io|cloud|me|xyz|cn|dev|app|top|cc|info|online|site|co|uk|de|jp|us|ru)(?![A-Za-z0-9_.-])',re.I)
 
 
 def scan_text(path, text, private_values=(), depth=0):
@@ -29,6 +34,8 @@ def scan_text(path, text, private_values=(), depth=0):
             for match in pattern.finditer(line):
                 try: address = ipaddress.ip_address(match[0].rstrip('.'))
                 except ValueError: continue
+                suffix=re.match(r'/[0-9]{1,3}\b',line[match.end():])
+                if suffix and str(address)+suffix[0] in POLICY_NETWORKS:continue
                 if not address.is_global or any(address.version == net.version and address in net for net in DOC_NETS): continue
                 add(number, 'public-server-address')
         if re.search(r'\bVM[0-9A-F]{8,}\b', line): add(number, 'deployment-hostname')
@@ -43,6 +50,11 @@ def scan_text(path, text, private_values=(), depth=0):
             if not any(host == allowed or host.endswith('.'+allowed) for allowed in PUBLIC_HOSTS):
                 try: ipaddress.ip_address(host)
                 except ValueError: add(number, 'unreviewed-url-host')
+        for match in BARE_HOST.finditer(line):
+            host=match[0].lower()
+            if line[match.end():].lstrip().startswith('('):continue
+            if not any(host==allowed or host.endswith('.'+allowed) for allowed in PUBLIC_HOSTS):
+                add(number,'unreviewed-bare-host')
         for value in private_values:
             literal = bool(re.search(r'(?<!\d)'+re.escape(value)+r'(?!\d)',line)) if value.isdigit() else value in line
             encoded = len(value) >= 8 and base64.b64encode(value.encode()).decode() in line

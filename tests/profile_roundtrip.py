@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real loopback transfer using a JSON-only protocol absent from the nine built-ins."""
 import argparse,hashlib,http.server,json,os,pathlib,socket,subprocess,sys,tempfile,threading,time
+from wire_fixture import map_public_origin
 
 
 def free_port():
@@ -50,6 +51,7 @@ def main():
             out=e.client_node(n);out['server']='127.0.0.1';cp=free_port()
             client={'log':{'level':'warn'},'inbounds':[{'type':'mixed','listen':'127.0.0.1','listen_port':cp}],
                     'outbounds':[out],'route':{'final':n['id']}}
+            map_public_origin(server,origin.server_port)
             for role,config in [('server',server),('client',client)]:
                 e.save(p/(role+'.json'),config)
                 subprocess.run([binary,'check','-c',str(p/(role+'.json'))],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -57,7 +59,7 @@ def main():
                 processes.append(subprocess.Popen([binary,'run','-c',str(p/(role+'.json'))],stdout=log,stderr=log))
             wait(n['port'],processes[0]);wait(cp,processes[1])
             r=subprocess.run(['curl','--silent','--show-error','--max-time','20','--proxy',f'socks5h://127.0.0.1:{cp}',
-                '--noproxy','',f'http://127.0.0.1:{origin.server_port}/'],capture_output=True,text=True)
+                '--noproxy','','http://public.example/'],capture_output=True,text=True)
             assert r.returncode==0 and r.stdout=='sbm-v35-custom-profile\n','自定义协议实际传输失败'
             report={'kind':a.kind,'server_type':server['inbounds'][0]['type'],
                     'definition':'official runtime Schema; no JSON input' if args.official_kind else 'JSON-only; no Python or shell plugin',

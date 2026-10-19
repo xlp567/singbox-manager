@@ -14,12 +14,12 @@ class Entrypoints(unittest.TestCase):
     def test_all_27_menu_actions_preserved(self):
         s=(ROOT/'src/manager-core.sh').read_text()
         menu=s.split("cat <<'MENU'",1)[1].split('\nMENU',1)[0]
-        self.assertEqual(set(map(int,re.findall(r'(?<!\d)(\d+)\s',menu))),set(range(31)))
+        self.assertEqual(set(map(int,re.findall(r'(?<!\d)(\d+)\s',menu))),set(range(32)))
         action=s.split('action() (',1)[1].split('\nmain() {',1)[0]
         cases=set()
         for group in re.findall(r'(?:^|;;)\s*([0-9|]+)(?:\|(?:dash|paths))?\)',action,re.M):
             cases.update(map(int,group.split('|')))
-        self.assertEqual(cases,set(range(1,31)))
+        self.assertEqual(cases,set(range(1,32)))
 
     def test_help_version_run_without_root_or_dependencies(self):
         for command,expected in [('help','upgrade'),('version','v3.5')]:

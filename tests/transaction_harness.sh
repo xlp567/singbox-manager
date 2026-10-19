@@ -26,7 +26,20 @@ managed_unit_check() { :; }
 install() { python3 "$PROJECT/tests/mocks/install.py" "$@"; }
 engine_real() { SBM_PROTOCOL_DIR="$STATE/protocols" python3 "$TMP/engine.pyz" "$@"; }
 engine() {
-    case $1 in netcheck) return 0;; *) engine_real "$@";; esac
+    case $1 in
+        netcheck)
+            if [[ ${TEST_STAMP_SECURITY:-0} == 1 ]]; then
+                PYTHONPATH="$PROJECT/src" python3 - "$2" <<'PY_POLICY'
+import sys
+from sbm import engine
+from sbm.core import network_policy
+path=sys.argv[1];model=engine.load(path)
+network_policy.stamp(model,['192.0.2.10','2001:db8::10']);engine.save(path,model)
+PY_POLICY
+            fi
+            return 0;;
+        *) engine_real "$@";;
+    esac
 }
 setup_tmp
 trap cleanup EXIT

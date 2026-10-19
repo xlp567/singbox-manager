@@ -70,7 +70,7 @@ stage_version() {
     local current
     CANDIDATE=''
     disk_guard
-    fetch_versions
+    fetch_versions full
     current=$(current_version) || current=""
     engine select-release "$TMP/catalog.json" "$TMP/selected.json" "$current"
     stage_selected "${1:-}"

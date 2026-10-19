@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.5.4 — Debian / Ubuntu, Bash >=4, systemd
+# singbox-manager v3.5.6 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.5.5
+SBM_VERSION=3.5.6
 SHORTCUT=/usr/local/bin/sbm
 TMP=''; TX=''; CANDIDATE=''; ACTION_ID=manual
 # Shared with transactions.sh bundled below.
@@ -42,12 +42,33 @@ confirm() {
 engine() { SBM_PROTOCOL_DIR="$STATE/protocols" python3 "$TMP/engine.pyz" "$@"; }
 audit_record() {
     if [[ -n $TMP && -f $TMP/engine.pyz ]] && command -v python3 >/dev/null; then
-        engine audit-append "$STATE/audit.jsonl" "$1" "$ACTION_ID" "$2" "${3:-}"
+        engine audit-append "$STATE/audit.jsonl" "$1" "$ACTION_ID" "$2" "${3:-}" || {
+            say '警告：审计记录未写入；操作继续，原审计文件保留。可用 sbm audit 检查、sbm audit repair 隔离修复。' >&2
+        }
     fi
+    return 0
 }
 setup_tmp() {
     TMP=$(mktemp -d "$STATE/tmp.XXXXXX")
     emit_engine >"$TMP/engine.pyz"
+}
+security_action() {
+    local mode=${1:-menu} choice
+    require_managed
+    if [[ $mode == menu ]]; then
+        engine security-status "$CONF/manager.json" "$CONF/config.json"
+        say '1  应用 / 刷新出口安全策略（先备份，sing-box 会短暂重启）'
+        say '0  返回'
+        read -r -p '选择: ' choice || return 0
+        [[ $choice == 1 ]] || return 0
+        mode=apply
+    fi
+    if [[ $mode == status ]]; then engine security-status "$CONF/manager.json" "$CONF/config.json" "${2:-}";return;fi
+    [[ $mode == apply ]] || die '出口安全操作无效。'
+    [[ ! -e $STATE/draft.json && ! -L $STATE/draft.json ]] || die '有未提交草稿；请先用菜单 22 继续、归档或清理，再应用安全策略。'
+    say '将禁止代理访问本机、内网、链路本地和元数据地址；节点凭据保持不变。'
+    prepare_model
+    apply_draft "$(active_binary)"
 }
 require_host() {
     (( BASH_VERSINFO[0] >= 4 )) || die '需要 Bash 4+，请在 Debian/Ubuntu VPS 上执行。'
@@ -74,11 +95,11 @@ require_host() {
 }
 dependencies() {
     local c missing=0
-    for c in python3 curl gpg openssl ss dig; do command -v "$c" >/dev/null || missing=1; done
+    for c in python3 curl gpg openssl ss dig ssh-keygen; do command -v "$c" >/dev/null || missing=1; done
     if (( missing )); then
         say '安装必要的系统依赖……'
         apt-get update
-        apt-get install -y python3 curl ca-certificates gnupg openssl iproute2 dnsutils util-linux
+        apt-get install -y python3 curl ca-certificates gnupg openssl iproute2 dnsutils util-linux openssh-client
     fi
 }
 pristine_package_config() {
@@ -415,6 +436,7 @@ prune_action() {
             *) die "拒绝删除异常路径：$d";;
         esac
     done
+    engine runtime-gc "$STATE/runtime-objects"
     say '清理完成。'
     df -h "$STATE" | awk 'NR==2 {print "剩余空间：" $4}'
 }
@@ -470,7 +492,8 @@ singbox-manager v$SBM_VERSION
   validate    统一编译并执行官方配置检查（只读），可加 --json
   module-test [all|协议] [--json]，离线模块配置自检
   runtime     查看实际运行程序的版本和构建能力，可加 --json
-  audit       校验本地审计链，可加 --json
+  audit       校验本地审计链，可加 --json；repair 确认后隔离损坏文件并开新链
+  security    出口安全：status [--json] / apply（备份后应用，重启 sing-box）
   version     显示脚本版本
   help        显示本帮助
 USAGE
@@ -514,6 +537,9 @@ action() (
         28) protocol_action;;
         29|paths) paths_action "${2:-}";;
         30) manager_update_action;;
+        31) security_action;;
+        audit-repair) confirm '保留损坏审计原件，开新链并记录旧链最后有效哈希（不改服务）' && engine audit-repair "$STATE/audit.jsonl";;
+        security) security_action "${2:-menu}" "${3:-}";;
         self-update) manager_update_action "${2:-menu}" "${3:-}";;
         protocols) if [[ ${2:-} == --json ]]; then engine protocols --json; else engine protocols --text; fi;;
         compat) require_managed; prepare_model; engine compatibility "$TMP/model.json" "$(active_binary)" "${2:-}";;
@@ -546,6 +572,23 @@ resolve_action() {
 }
 main() {
     local resolved
+    if [[ ${1:-} == audit && ${2:-} == repair ]]; then
+        (( $#==2 )) || die '审计修复不支持额外参数。'
+        require_host cli
+        action audit-repair
+        return
+    fi
+    if [[ ${1:-} == security ]]; then
+        case ${2:-menu} in
+            menu|apply) (( $#<=2 )) || die '出口安全参数过多。';;
+            status) (( $#<=3 )) || die '参数过多。'; [[ -z ${3:-} || ${3:-} == --json ]] || die '仅支持 --json。';;
+            *) die '出口安全操作无效。';;
+        esac
+        require_host cli
+        [[ ! -f $STATE/pending ]] || die '请先恢复未完成事务。'
+        action security "${2:-menu}" "${3:-}"
+        return
+    fi
     if [[ ${1:-} == self-update ]]; then
         case ${2:-menu} in
             local) (( $#<=3 )) || die '本地脚本升级参数过多。';;
@@ -568,8 +611,8 @@ main() {
         case $resolved in
             profile-import|profile-delete) (( $#==3 )) || die '请提供文件路径或模块标识。';;
             module-test) (( $#==2 || $#==3 )) || die '测试参数无效。';;
-            profile-create) (( $#<=3 )) && [[ -z ${3:-} || ${3:-} =~ ^[a-z][a-z0-9_-]{0,40}$ ]] || die '协议标识无效。';;
-            official-discover) (( $#<=3 )) && [[ -z ${3:-} || ${3:-} == --json ]] || die '仅支持 --json 选项。';;
+            profile-create) (( $#<=3 )) || die '参数过多。'; [[ -z ${3:-} || ${3:-} =~ ^[a-z][a-z0-9_-]{0,40}$ ]] || die '协议标识无效。';;
+            official-discover) (( $#<=3 )) || die '参数过多。'; [[ -z ${3:-} || ${3:-} == --json ]] || die '仅支持 --json 选项。';;
             *) (( $#<=2 )) || die '模块操作参数过多。';;
         esac
         local argument=${3:-}
@@ -620,7 +663,7 @@ main() {
                 [[ -z ${1:-} || ${1:-} == all || ${1:-} =~ ^[a-z][a-z0-9_-]*$ ]] || die '模块标识无效。'
                 [[ -z ${2:-} || ${2:-} == --json ]] || die '无效模块测试选项。'
             elif [[ $resolved =~ ^(protocols|compat|validate|runtime|audit|paths)$ ]]; then
-                (( $#<=1 )) && [[ -z ${1:-} || ${1:-} == --json ]] || die '仅支持 --json 选项。'
+                (( $#<=1 )) || die '参数过多。'; [[ -z ${1:-} || ${1:-} == --json ]] || die '仅支持 --json 选项。'
             else (( $#==0 )) || die '此命令不支持额外参数。'; fi
             require_host cli
             [[ ! -f $STATE/pending ]] || die '存在未完成事务；请先不带参数运行脚本，在菜单中完成恢复。'
@@ -664,6 +707,7 @@ main() {
 28 官方协议自动发现 / 参数表单 / 模块管理
 29 文件目录：运行程序 / 配置 / 草稿 / 备份 / 日志
 30 管理脚本升级：SSH 上传 / GitHub 拉取 / 回退
+31 出口安全：状态 / 阻止本机与内网 / 刷新地址
 0  退出
 MENU
         say '扩展命令：protocols / compat / validate / module-test / runtime / audit（菜单序号保持不变）'

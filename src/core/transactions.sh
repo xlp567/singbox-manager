@@ -9,16 +9,11 @@ os.symlink(src,tmp); os.replace(tmp,dst)
 PY
 }
 disk_guard() {
-    local p available
-    for p in "$STATE" "$RUNTIME"; do
-        available=$(df -Pk "$p" | awk 'NR==2 {print $4}')
-        [[ $available =~ ^[0-9]+$ ]] || die "无法检查 $p 可用空间。"
-        (( available >= 524288 )) || die "${p} 所在磁盘剩余不足 512 MiB，请先整理空间。"
-    done
+    engine snapshot-space "$BACKUPS" "$STATE/runtime-objects" "$CONF" "$EXPORTS" "$(active_binary || true)"
 }
 snapshot() {
     disk_guard
-    local dest binary
+    local dest binary kind=${1:-manual}
     dest=$(mktemp -d "$BACKUPS/$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
     [[ ! -d $CONF ]] || cp -a "$CONF" "$dest/config-dir"
     [[ ! -f $DROP ]] || cp -a "$DROP" "$dest/manager-override"
@@ -26,12 +21,12 @@ snapshot() {
     [[ ! -d $STATE/protocols ]] || cp -a "$STATE/protocols" "$dest/protocols"
     [[ ! -f $STATE/client-info.txt ]] || cp -a "$STATE/client-info.txt" "$dest/legacy-info"
     if binary=$(active_binary); then
-        cp -L "$binary" "$dest/runtime.bin"
-        engine runtime-copy-libs "$binary" "$dest/runtime-libs"
+        engine runtime-backup "$binary" "$dest" "$STATE/runtime-objects"
         "$binary" version >"$dest/version.txt"
     fi
     systemctl is-active --quiet sing-box && touch "$dest/was-active"
     systemctl is-enabled --quiet sing-box 2>/dev/null && touch "$dest/was-enabled"
+    engine snapshot-kind "$dest" "$kind"
     engine backup-seal "$dest"
     engine backup-complete "$dest"
     SNAP=$dest
@@ -109,7 +104,7 @@ cleanup() {
     exit "$rc"
 }
 begin_transaction() {
-    snapshot
+    snapshot automatic
     audit_record transaction-begin started "${SNAP##*/}"
     engine pending-write "$STATE/pending" "$SNAP"
     TX=$SNAP
@@ -119,6 +114,7 @@ commit_transaction() {
     engine pending-clear "$STATE/pending"
     TX=''
     audit_record transaction-commit ok "$snapshot_id" || say '警告：变更已提交，但审计日志未能写入。' >&2
+    engine prune-automatic "$BACKUPS" "$STATE/runtime-objects" "$STATE/pending" || say '警告：变更已提交，但自动备份清理未完成。可用菜单 24 清理。' >&2
 }
 recover_pending() {
     if [[ -f /usr/sbin/policy-rc.d ]] && grep -qx '# singbox-manager temporary policy' /usr/sbin/policy-rc.d; then

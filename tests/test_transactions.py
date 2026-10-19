@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from common import ROOT, engine, model
+from common import ROOT, engine, model, legacy_engine
 
 BASH = shutil.which('bash')
 
@@ -167,6 +167,69 @@ apply_draft "$TEST_ROOT/candidate"''',1)
         self.run_bash('service_action disable',1)
         self.assertFalse((self.p/'service.log').exists())
         self.assertEqual(list((self.p/'state/backups').iterdir()),[])
+
+    def test_corrupt_audit_does_not_block_stop_or_transaction_commit(self):
+        (self.p/'state/audit.jsonl').write_text('{"partial":')
+        out=self.run_bash('audit_record action-start started\nsleep() { :; }\nservice_action stop')
+        self.assertIn('审计记录未写入',out)
+        self.assertFalse(json.loads((self.p/'service.json').read_text())['active'])
+        self.assertFalse((self.p/'state/pending').exists())
+        self.assertEqual((self.p/'state/audit.jsonl').read_text(),'{"partial":')
+
+    def legacy_config(self):
+        config=legacy_engine().compile_config(engine.load(self.p/'config/manager.json'))
+        engine.save(self.p/'config/config.json',config)
+        return (self.p/'config/config.json').read_bytes()
+
+    def test_legacy_security_status_does_not_change_config_or_service(self):
+        original=self.legacy_config()
+        output=self.run_bash('security_action status --json')
+        self.assertIn('"requires_apply": true',output)
+        self.assertEqual((self.p/'config/config.json').read_bytes(),original)
+        self.assertFalse((self.p/'service.log').exists())
+
+    def test_security_apply_never_overwrites_an_existing_draft(self):
+        original=self.legacy_config();draft=self.p/'state/draft.json';draft.write_text('{"keep":"unfinished"}')
+        self.run_bash('TEST_STAMP_SECURITY=1\nsecurity_action apply',1)
+        self.assertEqual(draft.read_text(),'{"keep":"unfinished"}')
+        self.assertEqual((self.p/'config/config.json').read_bytes(),original)
+        self.assertFalse((self.p/'service.log').exists())
+
+    def test_legacy_security_apply_preserves_nodes_and_commits_marker(self):
+        original=self.legacy_config()
+        before=engine.load(self.p/'config/manager.json')['nodes']
+        self.run_bash('TEST_STAMP_SECURITY=1\nsecurity_action apply')
+        current=engine.load(self.p/'config/manager.json')
+        self.assertEqual(current['nodes'],before)
+        self.assertEqual(current['security']['policy'],'public-only-v1')
+        self.assertEqual(engine.load(self.p/'config/config.json'),engine.compile_config(current))
+        backup=next((self.p/'state/backups').iterdir())
+        self.assertEqual((backup/'config-dir/config.json').read_bytes(),original)
+        self.assertFalse((self.p/'state/pending').exists())
+
+    def test_cancel_security_apply_keeps_legacy_config_and_service(self):
+        original=self.legacy_config()
+        self.run_bash('TEST_STAMP_SECURITY=1\nconfirm(){ return 1; }\nsecurity_action apply')
+        self.assertEqual((self.p/'config/config.json').read_bytes(),original)
+        self.assertRestored();self.assertTrue((self.p/'state/draft.json').exists())
+        self.assertNotIn('stop sing-box',(self.p/'service.log').read_text() if (self.p/'service.log').exists() else '')
+
+    def test_failed_security_apply_rolls_back_legacy_config(self):
+        original=self.legacy_config()
+        self.run_bash('TEST_STAMP_SECURITY=1\ntouch "$TEST_ROOT/fail-restart"\nsecurity_action apply',1)
+        self.assertEqual((self.p/'config/config.json').read_bytes(),original)
+        self.assertRestored();self.assertFalse((self.p/'state/pending').exists())
+
+    def test_deduplicated_backup_restores_after_old_runtime_is_pruned(self):
+        self.run_bash('snapshot\nsaved=$SNAP\nrm -rf -- "$RUNTIME/releases/old"\nrestore_files "$saved"\nrestore_service "$saved"')
+        self.assertRestored()
+
+    def test_repeated_service_transactions_share_runtime_backup_inode(self):
+        self.run_bash('sleep() { :; }\nservice_action stop\nservice_action start\nservice_action restart')
+        backups=list((self.p/'state/backups').glob('*/runtime.bin'))
+        self.assertEqual(len(backups),3)
+        self.assertEqual(len({p.stat().st_ino for p in backups}),1)
+        self.assertEqual(len(list((self.p/'state/runtime-objects').iterdir())),1)
 
     def test_interrupt_during_stop_check_restores_original_state(self):
         self.run_bash('sleep() { kill -TERM $$; }\nservice_action stop',143)

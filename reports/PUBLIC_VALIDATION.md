@@ -1,18 +1,38 @@
 # 公开验证摘要 / Public validation summary
 
-原始部署日志、真实服务器地址、SSH 端口、主机名、节点域名、凭据与备份位置不进入公开仓库或下载包。历史实机验证只保留能力与结果摘要；原始证据在维护者私有目录保存。
+原始日志、真实地址、SSH 端口、主机名、节点域名、登录资料及备份位置仅保存在私有目录；以下只发布能力与结果。
 
 | 版本 / Version | 验证范围 / Validation | 结果 / Result |
 |---|---|---|
-| 3.5.1 | macOS / Debian 自动化回归；九协议、草稿清理、SSH 管理器更新 / regression, nine protocols, drafts, manager updates | 当时回归各 144 项通过；练手环境验证通过 / 144 tests per platform and authorized practice checks passed |
-| 3.5.2 | 官方版本查询失败处理 / official release query failures | 当时回归各 158 项通过 / 158 tests per platform passed |
-| 3.5.3 | 私有 GitHub 首次安装与已有安装保护 / private bootstrap and existing installation protection | 当时回归各 174 项通过 / 174 tests per platform passed |
-| 3.5.4 | 公开源匿名安装、管理器升级与节点连接 / anonymous bootstrap, manager update and transfers | 当时回归各 186 项通过，练手验证通过 / 186 tests per platform and authorized practice checks passed |
+| 3.5.1 | macOS / Debian；九协议、草稿、管理器升级 | 当时各 144 项通过，授权练手验收通过 |
+| 3.5.2 | 官方版本查询失败处理 | 当时各 158 项通过 |
+| 3.5.3 | 私有源首次安装与已有安装保护 | 当时各 174 项通过 |
+| 3.5.4 | 匿名安装、管理器升级、节点连接 | 当时各 186 项通过，练手验收通过 |
+| 3.5.5 | 事务停止服务、发布隐私 | 当时本地 208 项通过，未部署 |
+| 3.5.6 | 四项安全 / 可靠性修复与实际部署 | macOS / Debian 各 241 项通过；下述实际验证通过 |
 
-历史实机结果不代表后续版本已部署。v3.5.5 本次仅本地隔离验证，没有连接 VPS，没有重启服务或修改节点配置。
+## v3.5.6 — 2026-10-20
 
-Raw deployment logs and private infrastructure identifiers are excluded from public source and downloads. Historical live checks do not imply that later versions have been deployed. This v3.5.5 change is being verified locally with isolated service doubles; no VPS is contacted.
+- macOS 与 Debian 自动化各 **241/241**；Bash 语法、ShellCheck、脚本摘要通过。
+- 官方 sing-box **1.14.3**：本机九协议实际传输通过；练手 Debian 上九协议实际传输连续 **3 轮**通过，出口安全 **27 项 × 3 轮**通过。回环、私网、元数据、IPv6、映射地址、域名私网 / 混合结果 / 解析失败均被拒绝，正常请求通过。
+- 上述隔离连接测试使用拒绝规则之后的测试专用目标映射，将合成公网目标指向回环测试源站；生产配置不含这些覆盖字段，不向真实元数据服务发请求。
+- JSON 自定义 SOCKS 与官方 Schema 自动生成的 Snell 实际传输通过；管理脚本未被模块创建修改。
+- 独立 systemd 测试实例 **10 个阶段**通过：3 轮启停重启、旧模板迁移、运行失败回滚、强制终止、恢复、审计截断后继续操作、隔离修复续链、备份自动保留与去重。最近 10 份自动快照复用同一运行文件 inode。
+- 练手机先完成完整备份并另存本地，随后管理器从旧版更新到 **3.5.6**；单独应用出口保护。管理器更新阶段配置、运行程序与 sing-box PID 未变；策略迁移阶段 sing-box 按事务短暂重启。
+- 两个既有节点在变更前 / 后，各连续 **3 次**外部客户端 HTTPS 访问通过；迁移后两种节点均拒绝通过代理访问回环测试页面和 localhost。测试源站仅收到直接对照请求。
+- 节点及凭据摘要、运行程序摘要未变；3X-UI / Xray 的原进程与受保护文件摘要未变。无待恢复标记。
+- 发布使用同一白名单、固定公钥签名和可复现构建；当前文件、解码引擎、历史 refs、旧 Release 正文 / 附件 / 自动源码包均执行隐私检查。本版发布后的匿名下载与 GitHub 拉取回执见 Release 正文。
 
-v3.5.5：macOS 完整验证 208/208 通过；Bash 语法、ShellCheck、分发摘要通过。包含新增 10 项服务入口 / 事务回归和 12 项发布隐私回归。
+测试仅覆盖上述环境和场景，不代表任意未来协议、内核、网络或所有版本都已验证。新主机的首次引导仍需独立建立信任。低优先级跟进：BBR 原参数恢复、APT 公钥指纹固定、长审计链性能及公网地址发现依赖；本版未声称解决这些独立问题。已申请的旧外部缓存清理仍由托管方处理，当前源码检查不等于缓存已消失。
 
-v3.5.5: 208/208 local macOS tests passed, plus Bash syntax, ShellCheck and distribution checksums. Added 10 service-entry/transaction cases and 12 publication-privacy cases.
+## English
+
+v3.5.6 passed **241/241** automated checks on both macOS and Debian, plus Bash syntax, ShellCheck and distribution checksums. Official sing-box 1.14.3 completed nine-protocol local transfers; the authorized Debian practice host passed **3 rounds** of nine-protocol transfers and **27 egress cases per round**. Test-only mappings after the deny rules keep synthetic public destinations local; production configuration contains no such overrides. No real metadata service is contacted.
+
+JSON-only SOCKS and Schema-generated Snell transfers passed. A disposable systemd unit passed **10 stages**, covering three stop/start/restart cycles, migration, failed-runtime rollback, forced termination/recovery, corrupt-audit operation/repair and deduplicated retention of ten automatic snapshots. Existing production service names were not used for fault injection.
+
+The practice host was fully backed up and the archive copied locally before updating to v3.5.6. Manager installation preserved configuration, runtime and the existing sing-box process. A separate transaction applied egress protection and briefly restarted sing-box. Both existing nodes passed three external HTTPS requests before and after, and rejected controlled loopback/localhost targets afterward. Node credentials, runtime bytes, original 3X-UI/Xray processes and protected file hashes remained unchanged; no pending recovery marker remained.
+
+Only sanitized summaries are published. Source/archives share an allowlist, pinned-key signatures and reproducible builds; privacy review includes decoded engines, reachable history/refs and old releases/assets/generated archives. See the Release body for post-publication anonymous-download and GitHub-pull receipts.
+
+These results cover the named environments and cases, not every future runtime or network. Establish initial bootstrap trust independently. Separate low-priority follow-ups remain: BBR parameter restoration, APT key fingerprint pinning, long-chain audit performance and public-address discovery dependencies. Previously requested external-cache removal remains with the hosting provider; clean current source does not prove cached copies are gone.

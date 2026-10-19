@@ -99,7 +99,8 @@ class ProtocolPipeline(unittest.TestCase):
             with (p/'old.pyz').open('wb') as out:
                 subprocess.run(['bash','-c','source "$1"; emit_engine','bash',str(ROOT/'3.0版本备份/singbox-manager.sh')],check=True,stdout=out)
             subprocess.run(['python3',str(p/'old.pyz'),'compile',str(p/'model.json'),str(p/'old.json')],check=True)
-            self.assertEqual(e.compile_config(model()),e.load(p/'old.json'))
+            current=e.compile_config(model());current.pop('dns');current['route']={'final':'direct'}
+            self.assertEqual(current,e.load(p/'old.json'))
             subprocess.run(['python3',str(p/'old.pyz'),'export',str(p/'model.json'),str(p/'old-export')],check=True)
             e.export(model(),p/'new-export')
             for f in (p/'old-export').iterdir():self.assertEqual(f.read_bytes(),(p/'new-export'/f.name).read_bytes())

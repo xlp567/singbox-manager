@@ -37,5 +37,11 @@ with tarfile.open(archive) as tar:
     file=tar.extractfile(prefix+'/singbox-manager.sh').read()
     assert hashlib.sha256(file).hexdigest()==(ROOT/'singbox-manager.sha256').read_text().split()[0]
 digest=hashlib.sha256(archive.read_bytes()).hexdigest()
-(DEST/'SHA256SUMS').write_text(digest+'  '+archive.name+'\n'+hashlib.sha256((ROOT/'singbox-manager.sh').read_bytes()).hexdigest()+'  singbox-manager.sh\n')
+payloads={archive.name:archive.read_bytes()}
+for name in ['singbox-manager.sh','singbox-manager.sha256','install.py','install.sh','RELEASE_SIGNING.pub']:
+    payloads[name]=(ROOT/name).read_bytes()
+(DEST/'SHA256SUMS').write_text('# singbox-manager release v'+version+'\n'+''.join(hashlib.sha256(data).hexdigest()+'  '+name+'\n' for name,data in sorted(payloads.items())))
+stage=DEST/('release-v'+version);stage.mkdir(exist_ok=True)
+for name,data in payloads.items():(stage/name).write_bytes(data)
+(stage/'SHA256SUMS').write_bytes((DEST/'SHA256SUMS').read_bytes())
 print(f'Packaged {archive.name}: {len(files)} published files, {archive.stat().st_size} bytes, SHA-256 {digest}')

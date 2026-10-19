@@ -9,10 +9,10 @@ The interactive menu is currently in Chinese. Menu numbers below match the insta
 Use a Debian / Ubuntu VPS with root access, Bash 4+ and systemd. Plan the domain and listening ports. The manager does not automatically change your firewall, SSH, 3X-UI or Xray.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/install.sh)
+bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)
 ```
 
-Install `curl ca-certificates` first if curl is missing. The public repository needs no token. The bootstrap prepares Python 3 and util-linux when required, verifies the manager, and asks for `yes` before installation. In the menu that opens, choose **1**.
+Install `curl ca-certificates` first if curl is missing. The public repository needs no token. The bootstrap prepares Python 3, util-linux and an OpenSSH client when required, verifies the manager, and asks for `yes` before installation. In the menu that opens, choose **1**.
 
 Select an official runtime version and protocol, then provide the server address, port, authentication and certificate information requested by the wizard. TLS protocols need certificates; Reality and Shadowsocks have their own parameters. Ports occupied by other programs are avoided. Review the final preview and confirm before applying. Invalid configurations are rejected or rolled back.
 
@@ -59,7 +59,7 @@ Exports, QR codes, drafts and backups may contain credentials. Keep them private
 
 ## 5. Update the manager or runtime
 
-**Manager: 30 → 2**, or `sbm self-update github`. Public repositories are read anonymously first. The updater downloads the script and checksum from one pinned commit, verifies them, asks for confirmation, and backs up/replaces the manager without restarting the proxy. Exit the old menu before using the new `sbm`. Use **30 → 3** for manager rollback, **30 → 1** for a script/checksum uploaded through SSH, and **30 → 4** for optional private-repository credentials.
+**Manager: 30 → 2**, or `sbm self-update github`. The latest formal Release is read anonymously first. The updater verifies its pinned-key signature, manifest and checksums, statically previews the version, then asks for consent before backing up/replacing the manager without restarting the proxy. Exit the old menu before using the new `sbm`. Use **30 → 3** for manager rollback, **30 → 1** for signed files uploaded through SSH, and **30 → 4** for private-repository credentials. Legacy branch settings migrate to the stable Release channel; main is no longer followed.
 
 **sing-box runtime: 11** checks official versions; **10** selects or upgrades. Stable is the usual choice; prereleases require `PREVIEW`. After compatibility/configuration checks and confirmation, runtime changes restart sing-box and may interrupt connections briefly. Failed changes attempt to restore the prior snapshot/runtime.
 
@@ -86,7 +86,8 @@ Menu **23** backs up before reinitializing an incomplete installation or externa
 | 24 | Clean old backups/runtimes | 25 | Install shortcut |
 | 26 | Host overview | 27 | BBR switch, host-wide TCP settings |
 | 28 | Protocol discovery/modules | 29 | File locations |
-| 30 | Manager update/rollback | 0 | Exit |
+| 30 | Manager update/rollback | 31 | Egress security |
+| 0 | Exit | | |
 
 ## 8. CLI and protocol extensions
 
@@ -137,6 +138,8 @@ When a management operation needs this engine, `setup_tmp()` creates a private `
 | [src/sbm/](../src/sbm/) | Readable, editable Python management engine source |
 | [tools/build.py](../tools/build.py) | Merge Bash modules, create and encode the Python ZIP, generate the manager and checksum |
 | [tools/build_install_command.py](../tools/build_install_command.py) | Called by the main build to generate the bootstrap and short installation command |
+| [src/bootstrap/install.py](../src/bootstrap/install.py) | Editable installer template; the build embeds the verifier and generates root install.py |
+| [src/sbm/core/release_trust.py](../src/sbm/core/release_trust.py) | Shared pinned public key and release verifier |
 
 The builder writes all `.py` files under `src/sbm/` to a ZIP in a fixed order and adds `__main__.py`, which calls `sbm.entrypoint.run()`. It encodes the ZIP as Base64 inside the generated `emit_engine()` function. Bash `# @include core/…` markers are replaced with the corresponding module contents. Finally it writes the complete script and computes its SHA-256. Edit source and rebuild; do not edit the Base64 or modify only the generated script.
 
@@ -150,13 +153,13 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-To inspect a published version, check out its tag first, for example `git checkout v3.5.4`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
+To inspect a published version, check out its tag first, for example `git checkout v3.5.6`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
 
 - `singbox-manager.sh`: the combined Bash management layer and bundled Python engine.
 - `singbox-manager.sha256`: the SHA-256 checksum of that script.
-- `install.sh` and `新服务器一键安装命令.txt`: the first-install bootstrap and short command.
+- `install.py`, `install.sh` and `新服务器一键安装命令.txt`: generated installation entries and short command.
 
-With Bash, ShellCheck and Python 3 installed, run `bash tools/test.sh` to rebuild and run syntax checks, ShellCheck, regression tests and distribution checksum validation. To create the full source archive, run `python3 tools/package.py`; this produces the archive and `SHA256SUMS` under `dist/`, separately from building the standalone script. Repeated builds from identical source in the same build environment should produce the same script checksum.
+With Bash, ShellCheck, Git, OpenSSH and Python 3 installed, run `bash tools/test.sh` to rebuild and run syntax checks, ShellCheck, regression tests and distribution checksum validation. To create the full source archive, run `python3 tools/package.py`; this produces the archive and `SHA256SUMS` under `dist/`, separately from building the standalone script. Repeated builds from identical source in the same build environment should produce the same script checksum.
 
 ### Read-only comparison of the bundle and source
 
@@ -184,4 +187,36 @@ PY
 
 Menu 16 shares the transaction entry point with 15 / 17. It saves a full snapshot, then checks ActiveState=inactive and MainPID=0 five times, two seconds apart. Failure or interruption restores the previous state and records an audit event. Stop does not require valid configuration or an available runtime. Start and restart retain their compatibility and configuration checks.
 
-Run `bash tools/test.sh` and `python3 tools/package.py` after building. The publication manifest and archive share a privacy gate. Do not publish runtime directories, node data or raw deployment reports. See the [release procedure](../RELEASING.md) for checks and historical copies. This revision is tested locally; no VPS is contacted.
+Run `bash tools/test.sh` and `python3 tools/package.py` after building. The publication manifest and archive share a privacy gate. Do not publish runtime directories, node data or raw deployment reports. See the [release procedure](../RELEASING.md) and [public validation summary](../reports/PUBLIC_VALIDATION.md) for each version's actual scope.
+
+## 12. v3.5.6 security and reliability
+
+### Egress policy and migration
+
+Generated configurations reject loopback, private, link-local, metadata, multicast, local-interface and node-self destinations. Domains are resolved with the system resolver before checking all results; mixed public/private answers and failed resolution are rejected. See official [rule actions](https://sing-box.sagernet.org/configuration/route/rule_action/) and [address matching](https://sing-box.sagernet.org/configuration/route/rule/).
+
+After updating the manager, run `sbm security status`, then **31 → 1** or `sbm security apply`. Only this separately confirmed transaction changes live routes, with a backup and brief sing-box restart. Node credentials and client exports remain compatible. Only an exact historical generated configuration is recognized for migration; unknown edits still block overwriting. Stripping an applied policy triggers external-change protection.
+
+Local addresses are captured during application; apply again after interface IP changes. This is proxy egress policy, not a host firewall, and does not change SSH, 3X-UI or Xray. NAT64, 6to4 and Teredo prefixes are rejected; networks relying on these need a separate policy design. Ordinary forms do not offer disabling protection.
+
+An existing unfinished draft blocks security application rather than being overwritten; resume, archive or purge it through menu 22 first.
+
+### Damaged audit log
+
+Failed audit writes warn without blocking operations. Preserve `audit.jsonl`, then run `sbm audit repair` and confirm. The original becomes `audit.jsonl.corrupt-<time>-<id>` with mode 600; the new chain records its digest and last valid hash. Use `sbm audit --json` to verify. Do not silently truncate and claim an intact chain. This detects corruption, not privileged rewriting; appends still verify the whole chain.
+
+### Backup storage
+
+Runtime binaries/libraries are copied once into content-addressed `runtime-objects/`. Snapshots hard-link to that independent immutable copy, never to the live binary; cross-filesystem storage falls back to copies. Snapshots remain restorable after old runtime directories are removed. Successful transactions keep the latest **10** automatic snapshots; manual, legacy and pending-recovery backups remain. Menu 24 previews cleanup and collects unreferenced objects. Free-space checks estimate incremental storage; allow room for configurations, exports and new runtimes.
+
+### Signed releases and initial trust
+
+From v3.5.6, installation/update selects the latest formal Release and rejects prereleases, invalid/missing signatures, tag/manifest mismatches and automatic downgrades. There is no main/stale-cache fallback. OpenSSH Ed25519 signatures use namespace `singbox-manager-release`; the verifier pins the key in `RELEASE_SIGNING.pub`. Fingerprint:
+
+```text
+SHA256:iBBDFzAHqEHERHmSi/RbV9IEW8xBeuWcIV3ZkGMotE4
+```
+
+Before consent, only signatures, checksums, static version lines and Bash syntax are checked. Candidate `version`/`help` commands are never run, and the candidate is not sourced. SSH updates require the script, checksum, signed manifest and manifest signature; the [helper](../tools/ssh_upgrade.sh) handles all four. Explicit rollback to a local older backup may lack a release signature and lose security fixes.
+
+The initially downloaded bootstrap still relies on GitHub HTTPS and cannot authenticate itself. On a new host, or the first migration from an unsigned old manager, independently verify the public-key fingerprint or bootstrap. A previously trusted pinned key protects subsequent updates, but a replaced initial bootstrap/key or compromised signing private key defeats that trust. The signing private key is never included in source, downloads or VPS deployment.

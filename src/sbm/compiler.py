@@ -1,5 +1,6 @@
 """The single compilation/validation boundary shared by core and protocol adapters."""
 from .runtime import Runtime
+from .core import network_policy
 
 
 class ConfigurationCompiler:
@@ -9,7 +10,8 @@ class ConfigurationCompiler:
     def compile(self,model,validate):
         validate(model)
         out={'log':{'level':model.get('log_level','info'),'timestamp':True},'inbounds':[],
-             'outbounds':[{'type':'direct','tag':'direct'}],'route':{'final':'direct'}}
+             'outbounds':[{'type':'direct','tag':'direct'}],
+             'dns':{'servers':[{'type':'local','tag':'system'}]},'route':network_policy.route(model)}
         if any(n['enabled'] and self.adapter(n['kind']).tls for n in model['nodes']):
             a=model['acme']
             out['certificate_providers']=[{'type':'acme','tag':'acme-main','domain':[a['domain']],

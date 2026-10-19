@@ -7,10 +7,10 @@
 适用于 root 权限的 Debian / Ubuntu VPS、Bash 4+ 和 systemd。先确认域名解析和计划使用的端口；本工具不会自动修改防火墙、SSH、3X-UI 或 Xray。
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/install.sh)
+bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)
 ```
 
-若缺少 curl，先安装 `curl ca-certificates`。公开仓库无需令牌；安装器会按需安装 Python 3 和 util-linux。看到已验证版本后输入 `yes`，然后在自动打开的菜单选择 **1**。
+若缺少 curl，先安装 `curl ca-certificates`。公开仓库无需令牌；安装器会按需安装 Python 3、util-linux 和 OpenSSH 客户端。看到已验证版本后输入 `yes`，然后在自动打开的菜单选择 **1**。
 
 向导中选择官方核心版本和协议，填写服务器地址、监听端口、认证参数及需要的证书信息。普通 TLS 协议使用证书；Reality、Shadowsocks 等按各自参数配置。已有其他程序监听的端口会被避开。检查最终预览并确认后才提交配置，验证失败会停止或回滚。
 
@@ -59,7 +59,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/
 
 ## 5. 更新管理器和核心
 
-**管理器：30 → 2** 或 `sbm self-update github`。默认匿名读取公开仓库，按同一提交取得脚本和摘要，确认后备份并替换管理脚本，不重启代理服务。使用新的 `sbm` 前退出旧菜单。**30 → 3** 回退管理脚本；**30 → 1** 安装通过 SSH 上传的新脚本及摘要。私有仓库可在 **30 → 4** 配置只读令牌。
+**管理器：30 → 2** 或 `sbm self-update github`。默认匿名读取最新正式 Release，验证固定公钥签名、清单和脚本摘要，静态显示版本，确认后备份并替换管理脚本，不重启代理服务。使用新的 `sbm` 前退出旧菜单。**30 → 3** 回退管理脚本；**30 → 1** 安装通过 SSH 上传的签名发布文件。私有仓库可在 **30 → 4** 配置只读令牌。旧分支设置转为稳定 Release 渠道，不再跟踪 main。
 
 **sing-box 核心：11** 查询版本，**10** 选择 / 升级。稳定版通常适合日常使用；测试版会额外要求 `PREVIEW`。核心更新会进行兼容性和配置检查，确认后切换并重启 sing-box，现有连接可能短暂中断。失败时尝试恢复之前的快照和运行程序。
 
@@ -86,7 +86,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/xlp567/singbox-manager/main/
 | 24 | 清理旧备份 / 核心 | 25 | 安装快捷命令 |
 | 26 | 服务器概况 | 27 | BBR 开关（整机 TCP 设置） |
 | 28 | 协议发现和模块管理 | 29 | 文件目录 |
-| 30 | 管理器升级 / 回退 | 0 | 退出 |
+| 30 | 管理器升级 / 回退 | 31 | 出口安全策略 |
+| 0 | 退出 | | |
 
 ## 8. CLI 和扩展
 
@@ -137,6 +138,8 @@ CLI 和菜单共用管理核心。修改仍按交互确认执行；不要把含�
 | [src/sbm/](../src/sbm/) | 可直接阅读和修改的 Python 管理引擎源码 |
 | [tools/build.py](../tools/build.py) | 合并 Bash 模块，打包 Python ZIP 并编码，生成分发脚本与摘要 |
 | [tools/build_install_command.py](../tools/build_install_command.py) | 由主构建过程调用，生成安装入口和短命令 |
+| [src/bootstrap/install.py](../src/bootstrap/install.py) | 可编辑安装器模板；构建时嵌入签名验证器并生成根目录 install.py |
+| [src/sbm/core/release_trust.py](../src/sbm/core/release_trust.py) | 安装和升级共用的固定公钥及签名验证器 |
 
 构建器把 `src/sbm/` 下的全部 `.py` 文件按固定顺序写入 ZIP，并加入调用 `sbm.entrypoint.run()` 的 `__main__.py`；再把 ZIP 编码为 Base64，放进生成的 `emit_engine()`。Bash 的 `# @include core/…` 标记会被相应模块正文替换。最后输出完整脚本并计算它的 SHA-256。请修改源码后重建，不要直接改 Base64 或只修改生成脚本。
 
@@ -150,11 +153,11 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.4`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
+若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.6`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
 
 - `singbox-manager.sh`：合并 Bash 管理层与 Python 引擎的独立管理脚本。
 - `singbox-manager.sha256`：上述脚本的 SHA-256 摘要。
-- `install.sh`、`新服务器一键安装命令.txt`：首次安装入口与短命令。
+- `install.py`、`install.sh`、`新服务器一键安装命令.txt`：生成的首次安装入口与短命令。
 
 在具备 Bash、ShellCheck 和 Python 3 的开发环境中运行 `bash tools/test.sh`，完成重建、语法检查、ShellCheck、自动化回归和分发摘要检查。需要完整源码包时运行 `python3 tools/package.py`；它生成 `dist/` 下的归档和 `SHA256SUMS`，与生成独立管理脚本是两个步骤。同一份源码在相同构建环境中重复构建，脚本摘要应一致。
 
@@ -184,4 +187,36 @@ PY
 
 菜单 16 与 15 / 17 共用事务入口。停止前保存完整快照，随后用 5 次检查（每次间隔 2 秒）确认 ActiveState=inactive、MainPID=0，失败或中断自动恢复之前状态，记录事务审计。不检查无效配置或缺失运行程序，避免无法停止问题服务；启动 / 重启仍先做配置与兼容性检查。
 
-源码构建后执行 `bash tools/test.sh` 与 `python3 tools/package.py`，发布清单和源码包会经过同一隐私门禁，拒绝不合规内容。不要上传运行目录、节点资料或原始部署报告。隐私检查和历史副本处理见 [发布规范](../RELEASING.md)。本次只做本地隔离测试，未连接 VPS。
+源码构建后执行 `bash tools/test.sh` 与 `python3 tools/package.py`，发布清单和源码包会经过同一隐私门禁，拒绝不合规内容。不要上传运行目录、节点资料或原始部署报告。隐私检查和历史副本处理见 [发布规范](../RELEASING.md)。各版本实测范围见[公开摘要](../reports/PUBLIC_VALIDATION.md)。
+
+## 12. v3.5.6 安全与可靠性
+
+### 出口保护与旧配置迁移
+
+新生成的配置拒绝代理用户访问回环、私网、链路本地、云元数据、组播、本机接口地址和节点自身地址。域名先由系统解析器解析，再检查全部结果；含私网的混合结果、解析失败也拒绝。规则依据 [sing-box 官方路由动作](https://sing-box.sagernet.org/configuration/route/rule_action/) 和[地址匹配](https://sing-box.sagernet.org/configuration/route/rule/)实现。
+
+已部署节点先升级管理器，再执行 `sbm security status` 查看是否生效；选择 **31 → 1** 或 `sbm security apply` 才会备份、确认并应用，期间 sing-box 短暂重启。节点凭据及客户端导出保持兼容。只有与旧模板完全一致的配置才允许自动迁移；手工添加的未知路由仍会阻挡覆盖。应用后去掉保护规则会触发外部修改检查。
+
+本机接口地址在应用配置时采集；IP 变化后需再次应用以刷新。保护针对代理出口，不会设置系统防火墙或限制 SSH、3X-UI、Xray。当前策略拒绝 NAT64、6to4、Teredo 等转换前缀，相关网络可能需要另行设计；不提供关闭保护的普通表单选项。
+
+存在未提交草稿时，安全应用会拒绝覆盖；先到菜单 22 继续、归档或清理，再应用。
+
+### 审计损坏
+
+审计写入失败会明确警告，不再阻断启停、快照或恢复。先保存 `audit.jsonl`，执行 `sbm audit repair` 并确认：原文件以 `audit.jsonl.corrupt-时间-标识` 保留（600），新链记录原文件摘要及最后一个有效哈希。`sbm audit --json` 可核对新链；不要手工截断后宣称链完整。该链能检测损坏，不能防止 root 重写；追加时仍需校验整条链。
+
+### 备份空间
+
+运行文件及配套库按内容摘要保存在 `runtime-objects/`，快照通过硬链接复用独立的不可变副本，不链接到正在运行的文件。跨文件系统时退回复制。每份快照仍可独立恢复，清理旧核心不会使快照失效。成功事务自动保留最近 **10** 份自动快照；手动、旧格式和待恢复快照不自动删除。菜单 24 可预览清理，并回收没有备份引用的运行文件对象。空间检查按本次增量估算，仍需给配置、导出和新核心留出空间。
+
+### 签名发布与首次信任
+
+v3.5.6 起，安装和升级默认只取最新正式 Release，拒绝预发布、缺失或错误签名、清单与标签不匹配、自动降级；没有回退 main 或旧缓存。签名工具为 OpenSSH 的 Ed25519，签名命名空间 `singbox-manager-release`，公钥固定在验证器中，与根目录 `RELEASE_SIGNING.pub` 相同。指纹：
+
+```text
+SHA256:iBBDFzAHqEHERHmSi/RbV9IEW8xBeuWcIV3ZkGMotE4
+```
+
+确认前只检查签名、摘要、静态版本行及 Bash 语法，不执行候选脚本的 `version` / `help`，不 source 候选脚本。SSH 更新需同时上传脚本、脚本摘要、签名清单和清单签名；[上传工具](../tools/ssh_upgrade.sh)会处理四个文件。旧的本机备份可确认回退，但可能没有签名并丢失安全修复。
+
+首次短命令下载的引导器本身依赖 GitHub HTTPS；它不能证明自己的可信性。新服务器或从不验证签名的旧管理器首次迁移时，应通过独立可信渠道核对公钥指纹或引导器。已安装的固定公钥保护后续更新，但若首次引导器、公钥或维护者签名私钥已被替换，单靠同站下载无法恢复信任。签名私钥不属于源码包，不会部署到 VPS。
