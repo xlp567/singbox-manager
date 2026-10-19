@@ -1,4 +1,7 @@
 .cache/
+dist/
+reports/*/
+!reports/PUBLIC_VALIDATION.md
 __pycache__/
 *.pyc
 *.DS_Store

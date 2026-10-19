@@ -16,10 +16,10 @@ def sha(path):return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 protected=run(['sha256sum','-c',str(BASE/'protected-hashes.txt')])
 unchanged=run(['sha256sum','-c',str(BASE/'config-before.sha256')])
 assert not pathlib.Path('/var/lib/singbox-manager/pending').exists()
-assert run(['systemctl','show','x-ui','-p','MainPID','--value'])=='310831'
-assert pathlib.Path('/proc/349403').exists()
+assert run(['systemctl','show','x-ui','-p','MainPID','--value'])==os.environ['EXPECTED_XUI_PID']
+assert (pathlib.Path('/proc')/os.environ['EXPECTED_XRAY_PID']).exists()
 assert run(['systemctl','is-active','sing-box'])=='active'
-assert run(['/root/singbox-manager.sh','version'])=='singbox-manager v3.5'
+assert run(['/root/singbox-manager.sh','version'])==os.environ['EXPECTED_MANAGER_VERSION']
 assert sha('/root/singbox-manager.sh')==sha('/usr/local/bin/sbm')
 run(['/opt/singbox-manager/current/sing-box','check','-c','/etc/sing-box/config.json'])
 model=json.loads(pathlib.Path('/etc/sing-box/manager.json').read_text())
@@ -38,7 +38,7 @@ result={
     'nodes':[{'protocol':n['kind'],'port':n['port'],'enabled':n['enabled']} for n in model['nodes']],
     'original_config_hash_check':unchanged.splitlines(),
     'protected_file_hash_check':protected.splitlines(),
-    'protected_pids':{'x-ui':310831,'xray':349403},
+    'protected_processes_unchanged':True,
     'predeployment_backup':str(BASE/'singbox-state.tar.gz'),
     'predeployment_backup_sha256':(BASE/'prebackup.sha256').read_text().split()[0],
     'v35_snapshot':(BASE/'v35-snapshot-path').read_text().strip(),

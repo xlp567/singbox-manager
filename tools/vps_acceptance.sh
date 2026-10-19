@@ -16,6 +16,7 @@ ip -4 -o addr show scope global | grep -qF " $AUTHORIZED_IP/" || die '本机 IP 
 ORIGINAL=${ACCEPTANCE_DIR:?必须明确指定本次验收备份目录}
 [[ $ORIGINAL == /root/sbm-v35-prebackup-* && $ORIGINAL != *'/../'* ]] || die '备份目录不匹配本次 v3.5 验收。'
 [[ -s $ORIGINAL/singbox-state.tar.gz && -f $ORIGINAL/prebackup.sha256 ]] || die '缺少部署前备份。'
+: "${EXPECTED_XUI_PID:?必须明确提供受保护进程基线}" "${EXPECTED_XRAY_PID:?必须明确提供受保护进程基线}"
 PHASE=${1:-}
 case $PHASE in install|downgrade|upgrade|fault|crash|recover) ;; *) die '未知验收阶段。';; esac
 require_host cli
@@ -24,8 +25,8 @@ setup_tmp
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-[[ $(systemctl show x-ui -p MainPID --value) == 310831 ]] || die '3X-UI 进程与初始记录不同，停止验收。'
-[[ -d /proc/349403 ]] || die 'Xray 原进程不存在，停止验收。'
+[[ $(systemctl show x-ui -p MainPID --value) == "$EXPECTED_XUI_PID" ]] || die '3X-UI 进程与初始记录不同，停止验收。'
+[[ -d /proc/$EXPECTED_XRAY_PID ]] || die 'Xray 原进程不存在，停止验收。'
 LOG=$ORIGINAL/acceptance-$PHASE.log
 stage_exact() {
     fetch_versions
@@ -86,4 +87,4 @@ PY
         say 'PASS interrupted transaction recovery'
         ;;
 esac
-[[ $(systemctl show x-ui -p MainPID --value) == 310831 && -d /proc/349403 ]] || die '受保护进程发生变化。'
+[[ $(systemctl show x-ui -p MainPID --value) == "$EXPECTED_XUI_PID" && -d /proc/$EXPECTED_XRAY_PID ]] || die '受保护进程发生变化。'
