@@ -4,7 +4,9 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 python3 tools/build.py
 bash -n singbox-manager.sh
 bash -n 新服务器一键安装命令.txt
-shellcheck src/manager-core.sh src/core/*.sh singbox-manager.sh 新服务器一键安装命令.txt tests/transaction_harness.sh tools/vps_acceptance.sh tools/vps_feature_acceptance.sh tools/ssh_upgrade.sh tools/test.sh
+bash -n install.sh
+shellcheck -s bash 新服务器一键安装命令.txt
+shellcheck src/manager-core.sh src/core/*.sh singbox-manager.sh install.sh tests/transaction_harness.sh tools/vps_acceptance.sh tools/vps_feature_acceptance.sh tools/ssh_upgrade.sh tools/test.sh
 python3 -m unittest discover -s tests -v
 python3 - <<'PY'
 import hashlib,pathlib

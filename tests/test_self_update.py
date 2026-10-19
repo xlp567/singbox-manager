@@ -98,22 +98,42 @@ u.install(*sys.argv[1:])
     def test_github_download_uses_one_fixed_commit_and_private_read_token(self):
         (self.state/'github-token').write_text('github_pat_readonly_example');(self.state/'github-token').chmod(0o600)
         dest=self.p/'download';dest.mkdir();calls=[];sha='a'*40
-        def request(url,token):
+        def request(url,token=''):
             calls.append((url,token))
+            if not token:raise u.GitHubReadError(404)
             if '/commits/' in url:return {'sha':sha}
             data=self.checksum.read_bytes() if '.sha256' in url else self.candidate.read_bytes()
             return {'type':'file','encoding':'base64','size':len(data),'content':base64.b64encode(data).decode()}
         with patch.object(u,'request_json',side_effect=request):r=u.fetch(self.state,dest)
         self.assertEqual(r['commit'],sha);self.assertEqual(r['version'],'3.5.1')
-        self.assertTrue(all(token=='github_pat_readonly_example' for url,token in calls))
-        self.assertTrue(all('?ref='+sha in url for url,token in calls[1:]))
+        self.assertEqual(calls[0][1],'')
+        self.assertTrue(all(token=='github_pat_readonly_example' for url,token in calls[1:]))
+        self.assertTrue(all('?ref='+sha in url for url,token in calls[2:]))
         self.assertNotIn('github_pat',json.dumps(r))
 
     def test_github_mismatch_and_weak_token_permissions_fail_closed(self):
         token=self.state/'github-token';token.write_text('github_pat_readonly_example');token.chmod(0o644)
-        with self.assertRaises(ValueError):u.fetch(self.state,self.p)
+        with patch.object(u,'request_json',side_effect=u.GitHubReadError(404)):
+            with self.assertRaises(ValueError):u.fetch(self.state,self.p)
         with self.assertRaises(ValueError):u.request_json('https://example.com/','secret')
         with self.assertRaises(ValueError):u.NoRedirect().redirect_request(None,None,302,'',{},'https://example.com')
+
+    def test_public_update_ignores_expired_private_token_and_never_sends_it(self):
+        (self.state/'github-token').write_text('expired token left by older installation')
+        dest=self.p/'public';dest.mkdir();calls=[];sha='b'*40
+        def request(url,token=''):
+            calls.append((url,token))
+            if '/commits/' in url:return {'sha':sha}
+            data=self.checksum.read_bytes() if '.sha256' in url else self.candidate.read_bytes()
+            return {'type':'file','encoding':'base64','size':len(data),'content':base64.b64encode(data).decode()}
+        with patch.object(u,'request_json',side_effect=request):report=u.fetch(self.state,dest)
+        self.assertEqual(report['commit'],sha);self.assertTrue(all(not token for _,token in calls))
+
+    def test_public_network_failure_does_not_retry_with_stored_credential(self):
+        (self.state/'github-token').write_text('github_pat_readonly_example');(self.state/'github-token').chmod(0o600)
+        with patch.object(u,'request_json',side_effect=ValueError('network unavailable')) as request:
+            with self.assertRaises(ValueError):u.fetch(self.state,self.p)
+        self.assertEqual(request.call_count,1)
 
     def test_cli_update_entrypoints(self):
         code='source "$1"; require_host(){ :; }; action(){ printf "%s " "$@"; };shift;main "$@"'

@@ -129,6 +129,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('GitHub API 返回重定向，拒绝向其他地址发送访问凭据')
 
 
+class GitHubReadError(ValueError):
+    def __init__(self,status):
+        self.status=status
+        super().__init__('GitHub 读取失败（HTTP '+str(status)+'）；公开仓库请稍后重试，私有仓库可配置 Contents:read 令牌')
+
+
 def request_json(url,token=''):
     if not url.startswith('https://api.github.com/repos/'):raise ValueError('只允许 GitHub 官方仓库 API')
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager','X-GitHub-Api-Version':'2022-11-28'}
@@ -137,7 +143,7 @@ def request_json(url,token=''):
         with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(url,headers=headers),timeout=30) as r:
             data=r.read(LIMIT+1)
     except urllib.error.HTTPError as ex:
-        raise ValueError('GitHub 读取失败（HTTP '+str(ex.code)+'）；私有仓库请配置仅 Contents:read 的令牌') from None
+        raise GitHubReadError(ex.code) from None
     except urllib.error.URLError:
         raise ValueError('无法连接 GitHub，未修改管理脚本') from None
     if len(data)>LIMIT:raise ValueError('GitHub 响应超过大小限制')
@@ -171,13 +177,16 @@ def rollback_stage(state,backup,root,shortcut,destination):
 
 def fetch(state,destination):
     config=source(state);token_file=pathlib.Path(state)/'github-token';token=''
-    if token_file.exists():
+    api='https://api.github.com/repos/'+config['repository']
+    commit_url=api+'/commits/'+urllib.parse.quote(config['branch'],safe='')
+    try:commit=request_json(commit_url).get('sha','')
+    except GitHubReadError as error:
+        if error.status not in {401,403,404} or not token_file.exists():raise
         regular(token_file)
         if token_file.stat().st_mode&0o077:raise ValueError('GitHub 令牌权限必须为 600 或更严格')
         token=token_file.read_text().strip()
         if not re.fullmatch(r'[A-Za-z0-9_]{10,255}',token):raise ValueError('GitHub 令牌格式无效')
-    api='https://api.github.com/repos/'+config['repository']
-    commit=request_json(api+'/commits/'+urllib.parse.quote(config['branch'],safe=''),token).get('sha','')
+        commit=request_json(commit_url,token).get('sha','')
     if not re.fullmatch(r'[a-f0-9]{40}',commit):raise ValueError('GitHub 没有返回有效提交标识')
     dest=pathlib.Path(destination)
     for name in ['singbox-manager.sh','singbox-manager.sha256']:

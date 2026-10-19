@@ -6,6 +6,7 @@ import io
 import json
 import os
 import pathlib
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -21,6 +22,7 @@ def load(name,path):
 
 b=load('first_install','install.py')
 l=load('first_loader','tools/github_bootstrap.py')
+c=load('install_command','tools/build_install_command.py')
 
 
 def content(data):
@@ -145,10 +147,52 @@ class FirstInstallation(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'摘要不符'):l.launch()
 
     def test_copy_once_command_matches_tested_loader_and_has_no_pipe_to_shell(self):
-        command=(ROOT/'新服务器一键安装命令.txt').read_text()
-        self.assertIn((ROOT/'tools/github_bootstrap.py').read_text(),command)
+        command=c.private_command()
+        self.assertEqual(len(command.splitlines()),1)
+        self.assertIn('python3 -c',command)
+        self.assertIn('getpass',c.first_stage())
+        self.assertIn('/contents/install.py?ref=',c.first_stage())
         self.assertNotIn('curl |',command);self.assertIn('python3 ca-certificates',command)
+        args=shlex.split(command.split('python3 -c ',1)[1].rstrip().removesuffix(')'))
+        self.assertEqual(args,[c.first_stage()])
         subprocess.run(['bash','-n'],input=command,text=True,check=True)
+
+    def test_one_line_first_stage_prompts_once_and_checks_pinned_installer(self):
+        payload=b'assert BOOTSTRAP_TOKEN == "github_pat_test_readonly"\nassert BOOTSTRAP_COMMIT == "'+self.sha.encode()+b'"\n'
+        response=unittest.mock.MagicMock();response.read.side_effect=[json.dumps({'sha':self.sha}).encode(),json.dumps(content(payload)).encode()]
+        opener=unittest.mock.Mock();opener.open.return_value=response
+        with patch('getpass.getpass',return_value=self.token) as prompt,patch('urllib.request.build_opener',return_value=opener):
+            exec(c.first_stage(),{})
+        prompt.assert_called_once()
+        request=opener.open.call_args.args[0]
+        self.assertEqual(request.full_url,l.API+'/contents/install.py?ref='+self.sha)
+        self.assertEqual(request.get_header('Authorization'),'Bearer '+self.token)
+        self.assertEqual(response.read.call_args.args,(2097153,))
+
+    def test_one_line_corrupt_download_never_executes(self):
+        payload=content(b'raise RuntimeError("must not execute")');payload['sha']='0'*40
+        response=unittest.mock.MagicMock();response.read.side_effect=[json.dumps({'sha':self.sha}).encode(),json.dumps(payload).encode()]
+        opener=unittest.mock.Mock();opener.open.return_value=response
+        with patch('getpass.getpass',return_value=self.token),patch('urllib.request.build_opener',return_value=opener):
+            with self.assertRaisesRegex(SystemExit,'下载校验失败'):exec(c.first_stage(),{})
+
+    def test_one_line_disallows_redirects_and_invalid_token_before_network(self):
+        with patch('getpass.getpass',return_value='bad\nheader'),patch('urllib.request.build_opener') as opener:
+            with self.assertRaisesRegex(SystemExit,'令牌格式无效'):exec(c.first_stage(),{})
+        opener.assert_not_called()
+        response=unittest.mock.MagicMock();response.read.side_effect=[json.dumps({'sha':self.sha}).encode(),json.dumps(content(b'pass')).encode()]
+        opener=unittest.mock.Mock();opener.open.return_value=response
+        with patch('getpass.getpass',return_value=self.token),patch('urllib.request.build_opener',return_value=opener) as builder:
+            exec(c.first_stage(),{})
+        self.assertIsNone(builder.call_args.args[0].redirect_request(None,None,302,'',{},'https://other.example/'))
+
+    def test_second_stage_reuses_runtime_token_without_prompting_again(self):
+        terminal=unittest.mock.MagicMock();terminal.__enter__.return_value.readline.return_value='no\n'
+        with patch.object(b,'host_check'),patch.object(b.pathlib.Path,'exists',return_value=False),\
+             patch.object(b,'prepare',return_value={'version':'3.5.3'}),patch.object(b.getpass,'getpass') as prompt,\
+             patch('builtins.open',return_value=terminal),patch('sys.stdout',new_callable=io.StringIO):
+            b.main(self.token,self.sha)
+        prompt.assert_not_called()
 
     def test_cancel_does_not_install_or_store_credentials(self):
         terminal=unittest.mock.MagicMock();terminal.__enter__.return_value.readline.return_value='no\n'
