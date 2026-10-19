@@ -16,6 +16,7 @@ def inventory(conf,state,runtime,drop,exports,data,shortcut,script,unit):
            ('管理锁',s/'manager.lock'),('状态目录',s),('运行数据',d),
            ('管理脚本历史备份',s/'manager-backups'),('脚本升级恢复标记',s/'manager-update-pending.json'),
            ('GitHub 升级源',s/'update-source.json'),('GitHub 私有仓库只读令牌',s/'github-token'),
+           ('GitHub 首次安装记录',s/'install-origin.json'),
            ('ACME 证书与账户数据',d/'acme'),('systemd 管理器覆盖文件',drop)]
     if unit:paths.append(('systemd 主服务文件',unit))
     rows=[]

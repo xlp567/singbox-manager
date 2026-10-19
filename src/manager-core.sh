@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.5.2 — Debian / Ubuntu, Bash >=4, systemd
+# singbox-manager v3.5.3 — Debian / Ubuntu, Bash >=4, systemd
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.5.2
+SBM_VERSION=3.5.3
 SHORTCUT=/usr/local/bin/sbm
 TMP=''; TX=''; CANDIDATE=''; ACTION_ID=manual
 # Shared with transactions.sh bundled below.

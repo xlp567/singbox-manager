@@ -8,7 +8,7 @@ import re
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 DEST=ROOT/'dist'
 DEST.mkdir(exist_ok=True)
-names=['README.md','管理脚本升级.md','singbox-manager.sh','singbox-manager.sha256','使用说明.md','架构与扩展.md','自定义协议模块.md',
+names=['README.md','管理脚本升级.md','singbox-manager.sh','singbox-manager.sha256','install.py','新服务器安装.md','新服务器一键安装命令.txt','使用说明.md','架构与扩展.md','自定义协议模块.md',
        '测试与部署结果.md','文件目录速查.md','src','tools','tests','examples','reports','2.4版本备份','3.0版本备份','.gitignore']
 version=re.search(r'^SBM_VERSION=([0-9.]+)$',(ROOT/'src/manager-core.sh').read_text(),re.M)[1]
 prefix='singbox-manager-v'+version

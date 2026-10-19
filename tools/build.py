@@ -11,6 +11,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def build():
+    from build_install_command import build as install_command
+    install_command()
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         files = {str(p.relative_to(ROOT / 'src')): p.read_bytes()
