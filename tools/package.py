@@ -10,8 +10,12 @@ import sys
 import tarfile
 import re
 import tempfile
+import argparse
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--require-private',action='store_true',help='require the unpublished private identifier list before packaging')
+args=parser.parse_args()
 DEST=ROOT/'dist'
 DEST.mkdir(exist_ok=True)
 version=re.search(r'^SBM_VERSION=([0-9.]+)$',(ROOT/'src/manager-core.sh').read_text(),re.M)[1]
@@ -21,7 +25,11 @@ archive=DEST/(prefix+'.tar.gz')
 # In particular, old nested archives and unpublished server evidence stay out.
 with tempfile.TemporaryDirectory(prefix='sbm-package-') as temporary:
     manifest=pathlib.Path(temporary)/'manifest.json'
-    subprocess.run([sys.executable,str(ROOT/'tools/prepare_github.py'),'--output',str(manifest)],check=True,capture_output=True)
+    command=[sys.executable,str(ROOT/'tools/prepare_github.py'),'--output',str(manifest)]
+    if args.require_private:command.append('--require-private')
+    prepared=subprocess.run(command,capture_output=True,text=True)
+    if prepared.stderr:print(prepared.stderr,end='',file=sys.stderr)
+    if prepared.returncode:raise SystemExit(prepared.stdout or '发布隐私门禁失败，未打包')
     files=json.loads(manifest.read_text())
 with archive.open('wb') as output,gzip.GzipFile(filename='',mode='wb',fileobj=output,mtime=0) as compressed:
     with tarfile.open(fileobj=compressed,mode='w',format=tarfile.PAX_FORMAT) as tar:

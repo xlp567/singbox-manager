@@ -185,7 +185,7 @@ class ReleaseTrust(unittest.TestCase):
         requests=[];dest=self.root/'public';dest.mkdir()
         def asset(url,token):
             requests.append(url)
-            self.assertTrue(url.startswith('https://github.com/xlp567/singbox-manager/releases/download/v3.5.6/'))
+            self.assertTrue(url.startswith('https://github.com/xlp567/singbox-manager/releases/download/'+self.signed.tag+'/'))
             return self.signed.asset(url,token)
         release_trust.download_release('https://api.github.com/repos/xlp567/singbox-manager',dest,
             ('singbox-manager.sh','singbox-manager.sha256'),self.signed.request,asset)

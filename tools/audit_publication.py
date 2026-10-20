@@ -58,7 +58,10 @@ def main():
     parser.add_argument('--git-dir',type=pathlib.Path,required=True)
     parser.add_argument('--releases',type=pathlib.Path,required=True,help='downloaded notes, assets and generated source archives')
     parser.add_argument('--output',type=pathlib.Path,required=True)
-    args=parser.parse_args();root=pathlib.Path(__file__).resolve().parents[1];values=private_values(root)
+    parser.add_argument('--require-private',action='store_true',help='require the unpublished private identifier list')
+    args=parser.parse_args();root=pathlib.Path(__file__).resolve().parents[1]
+    try:values=private_values(root,args.require_private)
+    except (ValueError,OSError):raise SystemExit('FAIL privacy audit: 私有标识符清单缺失、为空或无效。') from None
     stats,findings=scan_git(args.git_dir,values);count=0
     for path in sorted(args.releases.rglob('*')):
         if path.is_symlink():raise ValueError('publication input must not contain symlinks')

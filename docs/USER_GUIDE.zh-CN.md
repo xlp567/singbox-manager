@@ -153,7 +153,7 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.6`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
+若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.7`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
 
 - `singbox-manager.sh`：合并 Bash 管理层与 Python 引擎的独立管理脚本。
 - `singbox-manager.sha256`：上述脚本的 SHA-256 摘要。
@@ -220,3 +220,12 @@ SHA256:iBBDFzAHqEHERHmSi/RbV9IEW8xBeuWcIV3ZkGMotE4
 确认前只检查签名、摘要、静态版本行及 Bash 语法，不执行候选脚本的 `version` / `help`，不 source 候选脚本。SSH 更新需同时上传脚本、脚本摘要、签名清单和清单签名；[上传工具](../tools/ssh_upgrade.sh)会处理四个文件。旧的本机备份可确认回退，但可能没有签名并丢失安全修复。
 
 首次短命令下载的引导器本身依赖 GitHub HTTPS；它不能证明自己的可信性。新服务器或从不验证签名的旧管理器首次迁移时，应通过独立可信渠道核对公钥指纹或引导器。已安装的固定公钥保护后续更新，但若首次引导器、公钥或维护者签名私钥已被替换，单靠同站下载无法恢复信任。签名私钥不属于源码包，不会部署到 VPS。
+
+
+## 13. v3.5.7 安装兼容与发布检查
+
+最低支持 Debian 11+ / Ubuntu 20.04+，要求 Python 3.8+、OpenSSH 客户端 8.1+、Bash 4+ 与运行中的 systemd。Debian 10 / Ubuntu 18.04 不受支持；旧 Python、旧系统及不支持 `ssh-keygen -Y` 的工具会明确提示依赖问题。系统最低版本是支持边界，并不表示已在每个发行版逐一实机测试。
+
+菜单 30 → 1 的 SSH 上传和 GitHub 更新均拒绝较旧版本；检查发生在确认前，安装写入前还会静态核对两个已安装入口。相同版本可重新安装或直接判定无变化。需要主动回退时，只通过菜单 30 → 3 选择已有本机备份并明确确认，旧版可能丢失安全修复。
+
+维护者发布须执行 `python3 tools/prepare_github.py --require-private --output .cache/publish.json`、`python3 tools/privacy_guard.py --require-private .cache/publish.json` 和 `python3 tools/package.py --require-private`。私有精确匹配清单缺失、为空或无效即失败；普通第三方源码副本会警告未启用私有匹配，但仍可构建、运行通用扫描。清单永不加入 GitHub 或源码包。公开测试记录统一见 [PUBLIC_VALIDATION.md](../reports/PUBLIC_VALIDATION.md)。

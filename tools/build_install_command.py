@@ -45,12 +45,20 @@ umask 077
 # shellcheck disable=SC1091
 . /etc/os-release
 [[ $ID == debian || $ID == ubuntu ]] || { echo '仅支持 Debian/Ubuntu'; exit 1; }
+IFS=. read -r os_major os_minor _ <<<"${VERSION_ID:-}"
+[[ $os_major =~ ^[0-9]+$ && ${os_minor:-0} =~ ^[0-9]+$ ]] || { echo '无法识别系统版本；最低支持 Debian 11+ / Ubuntu 20.04+'; exit 1; }
+if [[ $ID == debian ]]; then
+    (( 10#$os_major >= 11 )) || { echo '最低支持 Debian 11+ / Ubuntu 20.04+；请先升级系统'; exit 1; }
+else
+    (( 10#$os_major > 20 || (10#$os_major == 20 && 10#${os_minor:-0} >= 4) )) || { echo '最低支持 Debian 11+ / Ubuntu 20.04+；请先升级系统'; exit 1; }
+fi
 [[ -d /run/systemd/system ]] || { echo '需要运行中的 systemd'; exit 1; }
 [[ ! -e /root/singbox-manager.sh && ! -e /usr/local/bin/sbm ]] || { echo '已有管理器，请使用 sbm 菜单 30 → 2'; exit 1; }
 if ! command -v python3 >/dev/null 2>&1 || ! command -v flock >/dev/null 2>&1 || ! command -v ssh-keygen >/dev/null 2>&1 || [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
     apt-get update
     apt-get install -y python3 ca-certificates util-linux openssh-client
 fi
+python3 -c 'import sys; sys.version_info >= (3,8) or sys.exit("需要 Python 3.8+；最低支持 Debian 11+ / Ubuntu 20.04+")'
 echo '正在验证最新正式 Release 的签名（公开仓库，无需令牌）……'
 python3 - <<'SBM_PUBLIC_BOOTSTRAP'
 '''+loader+'''SBM_PUBLIC_BOOTSTRAP

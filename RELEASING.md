@@ -6,8 +6,8 @@
 
 1. 更新版本、中英文文档、公开验证摘要。执行适用的回归、真实连接与隐私检查；原始证据只在私有目录。
 2. `python3 tools/build.py` 生成管理器、摘要、install.py、install.sh 和短命令。安装器模板在 src/bootstrap/install.py；固定公钥验证器在 src/sbm/core/release_trust.py，构建时内嵌进安装入口。
-3. `python3 tools/prepare_github.py --output .cache/publish.json` 生成白名单。源码包与 GitHub 必须使用同一清单。
-4. `python3 tools/package.py` 生成完整源码包及 dist/release-v<版本>/。重复构建须产生相同脚本与归档摘要。
+3. `python3 tools/prepare_github.py --require-private --output .cache/publish.json` 生成白名单；`python3 tools/privacy_guard.py --require-private .cache/publish.json` 复核。源码包与 GitHub 必须使用同一清单。
+4. `python3 tools/package.py --require-private` 生成完整源码包及 dist/release-v<版本>/。重复构建须产生相同脚本与归档摘要。
 5. 用维护者私有 Ed25519 密钥签名：
    `python3 tools/sign_release.py --key /private/path/release_ed25519 --directory dist/release-v<版本>`
    工具核对公钥与固定值相同，并验证签名及所有附件。私钥权限 600，永不进入仓库、附件、VPS、日志。首次公钥建立或更换必须独立确认信任；在仓库中替换公钥不能自行证明可信。
@@ -21,6 +21,8 @@
 
 在不公开的 `.cache/private-identifiers.json` 保存真实环境标识用于精确匹配。只能发布 reports/PUBLIC_VALIDATION.md。禁止原始部署报告、真实地址、SSH 端口、用户名、节点域名、密码、令牌、证书私钥、缓存、整机备份。
 
+正式发布必须使用 `--require-private`：清单缺失、为空或无效即失败。第三方源码副本不带该私有文件；普通构建 / 通用扫描仍可运行，但会警告精确匹配未启用，不代表完成维护者发布检查。不要为了通过检查在新副本创建空清单。`tools/audit_publication.py` 同样支持 `--require-private`，历史及 Release 检查也必须开启。
+
 发布必须检查可达 Git 历史与所有 refs、Release 正文、附件及自动生成源码下载。清理 main 不等于清除旧提交、第三方下载或外部缓存；发现历史暴露需另行申请缓存清理，不能宣称自动消失。
 
 ## 服务器边界
@@ -31,7 +33,7 @@
 
 Synchronize local source, GitHub main, version tag and a formal Release for every version. Install/update defaults to the latest stable Release, never unpublished main.
 
-Build with tools/build.py, run relevant regression and connection tests, prepare the allowlisted source using tools/prepare_github.py, then package with tools/package.py. Require reproducible manager/archive checksums. The installer template is src/bootstrap/install.py; the shared pinned-key verifier is embedded during the build.
+Build with tools/build.py, run relevant regression and connection tests, prepare the allowlisted source using tools/prepare_github.py --require-private, then package with tools/package.py --require-private. Require reproducible manager/archive checksums. The installer template is src/bootstrap/install.py; the shared pinned-key verifier is embedded during the build.
 
 Sign the staged SHA256SUMS using tools/sign_release.py with an explicitly supplied private Ed25519 key. The tool requires the matching pinned public key and verifies the results. Keep the private key mode 600 and outside source, downloads, logs and VPS deployment. Establish or rotate trust independently.
 
@@ -42,3 +44,6 @@ Read back every asset anonymously; verify signatures, hashes, generated source d
 Privacy checks cover allowlisted source and decoded bundles, public addresses, SSH ports, hostnames, URLs, common bare domains and credentials. Diagnostics never echo values. Combine these checks with the unpublished private identifier list and review of uncommon/internal names. Inspect all reachable history/refs, release notes, assets and generated downloads. Editing main cannot erase prior downloads or external caches.
 
 Back up and validate only the explicitly authorized practice server before deployment. Separate manager updates from runtime/configuration transactions. Preserve 3X-UI/Xray and publish only sanitized validation summaries; retain raw evidence privately.
+
+
+Maintainer publication, standalone privacy checks and history/Release auditing must use `--require-private`. A missing, empty or invalid unpublished identifier list is a failure. Ordinary third-party copies without this list warn and can run generic scans; that is not equivalent to the maintainer release gate. Never publish the list or create an empty list merely to pass the gate.

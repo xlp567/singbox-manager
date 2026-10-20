@@ -2,7 +2,6 @@
 """Signed formal-Release installer; existing managers use menu 30."""
 import base64
 import fcntl
-import getpass
 import hashlib
 import json
 import os
@@ -22,6 +21,7 @@ import os
 import pathlib
 import re
 import subprocess
+import sys
 import tempfile
 import urllib.error
 import urllib.parse
@@ -32,6 +32,20 @@ PUBLIC_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAW8DuzbY0y6ySdV3EfX0XtEe7NogBEQ
 SIGNER='singbox-manager-release'
 NAMESPACE='singbox-manager-release'
 TRUST_LIMIT=2*1024*1024
+
+
+def require_python():
+    if sys.version_info < (3,8):
+        raise ValueError('需要 Python 3.8+；最低支持 Debian 11+ / Ubuntu 20.04+，请升级系统或 Python')
+
+
+def require_supported_os(identity,version):
+    minimum={'debian':(11,0),'ubuntu':(20,4)}
+    if identity not in minimum or not re.fullmatch(r'\d+(?:\.\d+)*',version):
+        raise ValueError('仅支持 Debian 11+ / Ubuntu 20.04+；无法识别系统版本')
+    parts=tuple(map(int,(version+'.0').split('.')[:2]))
+    if parts<minimum[identity]:
+        raise ValueError('最低支持 Debian 11+ / Ubuntu 20.04+；请先升级系统，未开始安装')
 
 
 def bounded_read(response,limit=TRUST_LIMIT):
@@ -58,6 +72,7 @@ def static_script_info(data):
 
 
 def verify_signature(manifest,signature):
+    require_python()
     if len(manifest)>65536 or len(signature)>16384:raise ValueError('签名或校验清单过大')
     with tempfile.TemporaryDirectory(prefix='sbm-signature-') as folder:
         root=pathlib.Path(folder);allowed=root/'allowed_signers';sig=root/'manifest.sig'
@@ -66,7 +81,11 @@ def verify_signature(manifest,signature):
             result=subprocess.run(['ssh-keygen','-Y','verify','-f',str(allowed),'-I',SIGNER,'-n',NAMESPACE,'-s',str(sig)],
                 input=manifest,capture_output=True,timeout=15,env={'PATH':os.defpath,'LC_ALL':'C'})
         except FileNotFoundError:raise ValueError('缺少签名验证工具 ssh-keygen；请安装 openssh-client') from None
-        if result.returncode:raise ValueError('发布签名验证失败，未执行候选程序')
+        if result.returncode:
+            diagnostic=result.stderr+result.stdout
+            if re.search(rb'(?:unknown|illegal|invalid|unrecognized) option[^\r\n]*\bY\b',diagnostic,re.I):
+                raise ValueError('ssh-keygen 不支持 -Y 签名验证；需要 OpenSSH 8.1+，请升级 openssh-client（Debian 11+ / Ubuntu 20.04+）')
+            raise ValueError('发布签名验证失败，未执行候选程序')
 
 
 def parse_manifest(data,tag=None):
@@ -190,23 +209,10 @@ def request(path,token):
             return value
         except urllib.error.HTTPError as error:
             if error.code in {500,502,503,504} and not attempt:time.sleep(.25);continue
-            raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；请确认令牌仅授权本仓库 Contents: Read-only') from None
+            raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；公开仓库请稍后重试，私有仓库请检查 Contents:read 权限') from None
         except (urllib.error.URLError,TimeoutError):
             if not attempt:time.sleep(.25);continue
             raise ValueError('无法连接 GitHub，安装未完成') from None
-
-
-def file_content(item):
-    if not isinstance(item,dict) or item.get('type')!='file' or item.get('encoding')!='base64':
-        raise ValueError('GitHub 安装文件格式异常')
-    size=item.get('size')
-    if not isinstance(size,int) or not 0<=size<=LIMIT:raise ValueError('GitHub 安装文件过大')
-    try:data=base64.b64decode(''.join(item['content'].split()),validate=True)
-    except (ValueError,KeyError,AttributeError):raise ValueError('GitHub 安装文件编码无效') from None
-    if len(data)!=size:raise ValueError('GitHub 安装文件长度不符')
-    blob=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
-    if blob!=item.get('sha'):raise ValueError('GitHub 安装文件内容摘要不符')
-    return data
 
 
 def atomic(path,data,mode=0o600):
@@ -287,10 +293,12 @@ def install(stage,token,origin,root='/root',shortcut='/usr/local/bin/sbm',state=
 
 
 def host_check():
+    require_python()
     if sys.platform!='linux' or os.geteuid()!=0:raise ValueError('请在新 Debian/Ubuntu 服务器上以 root 执行；可先 sudo -i')
     release=pathlib.Path('/etc/os-release').read_text()
-    identity=next((line.split('=',1)[1].strip('"') for line in release.splitlines() if line.startswith('ID=')),'')
-    if identity not in {'debian','ubuntu'} or not pathlib.Path('/run/systemd/system').is_dir():raise ValueError('需要 Debian/Ubuntu 及运行中的 systemd')
+    fields=dict(line.split('=',1) for line in release.splitlines() if '=' in line and not line.startswith('#'))
+    require_supported_os(fields.get('ID','').strip('"\''),fields.get('VERSION_ID','').strip('"\''))
+    if not pathlib.Path('/run/systemd/system').is_dir():raise ValueError('需要 Debian/Ubuntu 及运行中的 systemd')
     result=subprocess.run(['bash','-c','(( BASH_VERSINFO[0]>=4 ))'],capture_output=True)
     if result.returncode:raise ValueError('需要 Bash 4 或更新版本')
 

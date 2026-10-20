@@ -2,7 +2,6 @@
 """Signed formal-Release installer; existing managers use menu 30."""
 import base64
 import fcntl
-import getpass
 import hashlib
 import json
 import os
@@ -15,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from sbm.core.release_trust import download_release,verify_directory,static_script_info,asset_bytes,bounded_read
+from sbm.core.release_trust import download_release,verify_directory,static_script_info,asset_bytes,bounded_read,require_python,require_supported_os
 
 REPOSITORY='xlp567/singbox-manager'
 CHANNEL='stable'
@@ -44,23 +43,10 @@ def request(path,token):
             return value
         except urllib.error.HTTPError as error:
             if error.code in {500,502,503,504} and not attempt:time.sleep(.25);continue
-            raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；请确认令牌仅授权本仓库 Contents: Read-only') from None
+            raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；公开仓库请稍后重试，私有仓库请检查 Contents:read 权限') from None
         except (urllib.error.URLError,TimeoutError):
             if not attempt:time.sleep(.25);continue
             raise ValueError('无法连接 GitHub，安装未完成') from None
-
-
-def file_content(item):
-    if not isinstance(item,dict) or item.get('type')!='file' or item.get('encoding')!='base64':
-        raise ValueError('GitHub 安装文件格式异常')
-    size=item.get('size')
-    if not isinstance(size,int) or not 0<=size<=LIMIT:raise ValueError('GitHub 安装文件过大')
-    try:data=base64.b64decode(''.join(item['content'].split()),validate=True)
-    except (ValueError,KeyError,AttributeError):raise ValueError('GitHub 安装文件编码无效') from None
-    if len(data)!=size:raise ValueError('GitHub 安装文件长度不符')
-    blob=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
-    if blob!=item.get('sha'):raise ValueError('GitHub 安装文件内容摘要不符')
-    return data
 
 
 def atomic(path,data,mode=0o600):
@@ -141,10 +127,12 @@ def install(stage,token,origin,root='/root',shortcut='/usr/local/bin/sbm',state=
 
 
 def host_check():
+    require_python()
     if sys.platform!='linux' or os.geteuid()!=0:raise ValueError('请在新 Debian/Ubuntu 服务器上以 root 执行；可先 sudo -i')
     release=pathlib.Path('/etc/os-release').read_text()
-    identity=next((line.split('=',1)[1].strip('"') for line in release.splitlines() if line.startswith('ID=')),'')
-    if identity not in {'debian','ubuntu'} or not pathlib.Path('/run/systemd/system').is_dir():raise ValueError('需要 Debian/Ubuntu 及运行中的 systemd')
+    fields=dict(line.split('=',1) for line in release.splitlines() if '=' in line and not line.startswith('#'))
+    require_supported_os(fields.get('ID','').strip('"\''),fields.get('VERSION_ID','').strip('"\''))
+    if not pathlib.Path('/run/systemd/system').is_dir():raise ValueError('需要 Debian/Ubuntu 及运行中的 systemd')
     result=subprocess.run(['bash','-c','(( BASH_VERSINFO[0]>=4 ))'],capture_output=True)
     if result.returncode:raise ValueError('需要 Bash 4 或更新版本')
 

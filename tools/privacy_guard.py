@@ -15,7 +15,7 @@ V6 = re.compile(r'(?<![\w:])(?:[0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F:.]*(?![\w:])')
 SECRET = re.compile(r'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}')
 BUNDLE = re.compile(r"<<'SBM_BUNDLE'\n([A-Za-z0-9+/=\s]+)\nSBM_BUNDLE")
 DOC_NETS = tuple(ipaddress.ip_network(n) for n in ('192.0.2.0/24','198.51.100.0/24','203.0.113.0/24','2001:db8::/32'))
-PUBLIC_HOSTS = ('anthropic.com','github.com','githubusercontent.com','githubassets.com','sagernet.org','sing-box.app','ipify.org','shields.io','json-schema.org','letsencrypt.org','example.com','example.org','example.net','example','invalid','test','localhost')
+PUBLIC_HOSTS = ('anthropic.com','github.com','githubusercontent.com','githubassets.com','sagernet.org','sing-box.app','ipify.org','shields.io','json-schema.org','letsencrypt.org','openssh.com','openssh.org','python.org','example.com','example.org','example.net','example','invalid','test','localhost')
 POLICY_NETWORKS={'224.0.0.0/4','ff00::/8','64:ff9b::/96','64:ff9b:1::/48','2002::/16','2001::/32'}
 # Conservative bare-host detection complements structured fields and URLs.
 # It deliberately does not treat Python attributes or arbitrary file suffixes
@@ -90,20 +90,30 @@ def check_manifest(files, private_values=()):
     return findings
 
 
-def private_values(root):
+def private_values(root,require=False):
     file = root/'.cache/private-identifiers.json'
-    if not file.exists(): return []
+    if not file.exists():
+        if require:raise ValueError('缺少私有标识符清单；--require-private 已拒绝发布检查')
+        print('警告：缺少 .cache/private-identifiers.json，仅检查通用隐私规则；正式发布须使用 --require-private。',file=sys.stderr)
+        return []
     values = json.loads(file.read_text())
     if not isinstance(values, list) or not all(isinstance(v,str) and v for v in values): raise ValueError('invalid private identifier list')
+    if not values:
+        if require:raise ValueError('私有标识符清单为空；--require-private 已拒绝发布检查')
+        print('警告：私有标识符清单为空，仅检查通用隐私规则。',file=sys.stderr)
     return values
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('manifest', type=pathlib.Path)
+    parser.add_argument('--require-private',action='store_true',help='fail if the unpublished private identifier list is missing or empty')
     args = parser.parse_args()
     files = json.loads(args.manifest.read_text())
-    findings = check_manifest(files, private_values(pathlib.Path(__file__).resolve().parents[1]))
+    try:values=private_values(pathlib.Path(__file__).resolve().parents[1],args.require_private)
+    except (ValueError,OSError):
+        print('FAIL privacy guard: 私有标识符清单缺失、为空或无效；未执行发布检查。',file=sys.stderr);return 1
+    findings = check_manifest(files,values)
     if findings:
         print(json.dumps({'privacy':'FAIL','findings':findings},ensure_ascii=False,indent=2))
         return 1

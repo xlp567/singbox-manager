@@ -7,7 +7,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import uuid
-from sbm.core.release_trust import download_release,asset_bytes,bounded_read
+from sbm.core.release_trust import download_release,asset_bytes,bounded_read,require_python
 
 API='https://api.github.com/repos/xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -40,6 +40,7 @@ def consent(tag):
 
 
 def launch(token=''):
+    require_python()
     with tempfile.TemporaryDirectory(prefix='sbm-bootstrap-') as folder:
         release=read('/releases/latest',token)
         origin=download_release(API,folder,('install.py',),lambda url,t:read(url[len(API):],t),asset_bytes,token,release=release)

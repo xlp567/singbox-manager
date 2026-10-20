@@ -6,7 +6,7 @@ The interactive menu is currently in Chinese. Menu numbers below match the insta
 
 ## 1. Install and create the first node
 
-Use a Debian / Ubuntu VPS with root access, Bash 4+ and systemd. Plan the domain and listening ports. The manager does not automatically change your firewall, SSH, 3X-UI or Xray.
+Use a Debian 11+ / Ubuntu 20.04+ VPS with root access, Bash 4+ and systemd. Plan the domain and listening ports. The manager does not automatically change your firewall, SSH, 3X-UI or Xray.
 
 ```bash
 bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)
@@ -153,7 +153,7 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-To inspect a published version, check out its tag first, for example `git checkout v3.5.6`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
+To inspect a published version, check out its tag first, for example `git checkout v3.5.7`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
 
 - `singbox-manager.sh`: the combined Bash management layer and bundled Python engine.
 - `singbox-manager.sha256`: the SHA-256 checksum of that script.
@@ -220,3 +220,12 @@ SHA256:iBBDFzAHqEHERHmSi/RbV9IEW8xBeuWcIV3ZkGMotE4
 Before consent, only signatures, checksums, static version lines and Bash syntax are checked. Candidate `version`/`help` commands are never run, and the candidate is not sourced. SSH updates require the script, checksum, signed manifest and manifest signature; the [helper](../tools/ssh_upgrade.sh) handles all four. Explicit rollback to a local older backup may lack a release signature and lose security fixes.
 
 The initially downloaded bootstrap still relies on GitHub HTTPS and cannot authenticate itself. On a new host, or the first migration from an unsigned old manager, independently verify the public-key fingerprint or bootstrap. A previously trusted pinned key protects subsequent updates, but a replaced initial bootstrap/key or compromised signing private key defeats that trust. The signing private key is never included in source, downloads or VPS deployment.
+
+
+## 13. v3.5.7 installation compatibility and publication checks
+
+Minimum supported systems are Debian 11+ / Ubuntu 20.04+, with Python 3.8+, OpenSSH client 8.1+, Bash 4+ and running systemd. Debian 10 / Ubuntu 18.04 are unsupported. Old Python/OS versions and tools lacking `ssh-keygen -Y` produce explicit dependency errors. These minimums describe the support boundary; they do not claim live validation on every distribution.
+
+Both menu 30 → 1 SSH uploads and GitHub updates reject older versions before consent. The install function also checks both existing script entry points statically before writing. Equal versions remain allowed and may be a no-op. Intentional rollback uses menu 30 → 3 with a local backup and explicit confirmation; older backups may lose security fixes.
+
+Maintainer releases require `python3 tools/prepare_github.py --require-private --output .cache/publish.json`, `python3 tools/privacy_guard.py --require-private .cache/publish.json` and `python3 tools/package.py --require-private`. A missing, empty or invalid private exact-match list fails these checks. Third-party source copies can still build and run generic checks, with a warning that private matching is unavailable. Never publish the private list. Public test evidence is summarized in [PUBLIC_VALIDATION.md](../reports/PUBLIC_VALIDATION.md).

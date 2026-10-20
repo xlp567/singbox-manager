@@ -41,6 +41,7 @@ manager_update_action() {
     else die '脚本升级方式无效。'; fi
     [[ $mode == rollback ]] || engine manager-update verify-release "$TMP"
     engine manager-update verify "$TMP/singbox-manager.sh" "$TMP/singbox-manager.sha256" >"$TMP/update-info.json"
+    [[ $mode == rollback ]] || engine manager-update check-version "$(engine get "$TMP/update-info.json" version)" "$SBM_VERSION"
     say "目标管理脚本版本：$(engine get "$TMP/update-info.json" version)"
     say "SHA-256：$(engine get "$TMP/update-info.json" sha256)"
     say '安装位置：/root/singbox-manager.sh、/usr/local/bin/sbm'

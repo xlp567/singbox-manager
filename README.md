@@ -4,13 +4,17 @@
 
 简体中文 · [English](README.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md) · [English guide](docs/USER_GUIDE.en.md)
 
-![Version](https://img.shields.io/badge/version-3.5.6-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.5.7-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [正式版本与下载附件](https://github.com/xlp567/singbox-manager/releases/latest)：包含完整源码包、独立管理脚本、安装入口、SHA-256 清单及 Ed25519 签名。
 
+[已知问题与使用限制](docs/KNOWN_ISSUES.md)
+
 ## 快速开始
 
-在新的 **Debian / Ubuntu VPS** 上用 root 登录 SSH，执行：
+最低支持 **Debian 11+ / Ubuntu 20.04+**，并要求 **Python 3.8+、OpenSSH 客户端 8.1+、Bash 4+ 和运行中的 systemd**。Debian 10、Ubuntu 18.04 不受支持；安装器会检查系统及 Python 版本，旧版 `ssh-keygen` 会明确提示不支持签名验证。OpenSSH 的 `-Y` 文件签名功能始于 [8.1](https://www.openssh.org/txt/release-8.1)，`Path.unlink(missing_ok=...)` 始于 [Python 3.8](https://docs.python.org/3/library/pathlib.html#pathlib.Path.unlink)。
+
+在满足上述要求的新 VPS 上用 root 登录 SSH，执行：
 
 ```bash
 bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)

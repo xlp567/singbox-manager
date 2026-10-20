@@ -1,5 +1,19 @@
 # Changelog / 更新记录
 
+## 3.5.7 — 2026-10-20
+
+- 明确 Debian 11+ / Ubuntu 20.04+、Python 3.8+、OpenSSH 客户端 8.1+ 的最低要求；安装入口提前检查，旧签名工具给出明确诊断。
+- 公开说明改为引用脱敏验证摘要；回归确认管理核心可被 Git 正常跟踪，补充 private/ 排除。
+- 隐私门禁增加缺失 / 空私有清单警告与 --require-private 严格模式，贯通源码清单、打包及历史 / Release 审计。
+- 删除旧下载解码函数、遗留测试和未使用的 getpass；修正公开仓库读取失败提示。
+- SSH 上传更新拒绝降级；确认前检查，写入前核对两个已安装入口。主动回退仍使用明确确认的本机备份流程。
+
+- Document/enforce Debian 11+ / Ubuntu 20.04+, Python 3.8+ and OpenSSH client 8.1+; distinguish unsupported signature tools from invalid signatures.
+- Point public manuals to sanitized validation; verify Git tracks the core and excludes private/.
+- Warn about missing/empty private identifiers and add --require-private across source preparation, packaging and history/Release auditing.
+- Remove the obsolete download decoder, its legacy test and unused getpass; correct public-repository error guidance.
+- Reject SSH-upload downgrades before consent and check both installed entry points before writing. Explicit local-backup rollback remains available.
+
 ## 3.5.6 — 2026-10-20
 
 - 所有协议统一加入出口保护，拒绝本机、私网、链路本地和元数据访问；域名解析后再次检查，失败时拒绝。新增菜单 31 / security CLI，以及精确识别旧模板的事务迁移。

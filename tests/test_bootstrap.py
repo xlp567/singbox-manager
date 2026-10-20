@@ -1,6 +1,4 @@
-import base64
 import fcntl
-import hashlib
 import importlib.util
 import io
 import json
@@ -23,11 +21,6 @@ def load(name,path):
 b=load('first_install','install.py')
 l=load('first_loader','tools/github_bootstrap.py')
 c=load('install_command','tools/build_install_command.py')
-
-
-def content(data):
-    return {'type':'file','encoding':'base64','size':len(data),'content':base64.b64encode(data).decode(),
-            'sha':hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()}
 
 
 class FirstInstallation(unittest.TestCase):
@@ -113,11 +106,6 @@ class FirstInstallation(unittest.TestCase):
         self.prepare();p=self.stage/'singbox-manager.sh';p.write_bytes(p.read_bytes()+b'\n# tampered')
         with patch.object(b,'engine') as run,self.assertRaisesRegex(ValueError,'摘要'):self.install()
         run.assert_not_called();self.assertFalse(self.shortcut.exists())
-
-    def test_legacy_file_decoder_checks_content_metadata(self):
-        good=content(b'hello');self.assertEqual(b.file_content(good),b'hello')
-        for change in [{'type':'symlink'},{'size':b.LIMIT+1},{'size':0},{'sha':'0'*40},{'content':'?'}]:
-            with self.subTest(change=change),self.assertRaises(ValueError):b.file_content(dict(good,**change))
 
     def test_http_permission_error_never_discloses_token(self):
         opener=unittest.mock.Mock();opener.open.side_effect=urllib.error.HTTPError(b.API,403,'',{},None)

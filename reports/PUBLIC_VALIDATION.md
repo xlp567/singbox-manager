@@ -10,6 +10,17 @@
 | 3.5.4 | 匿名安装、管理器升级、节点连接 | 当时各 186 项通过，练手验收通过 |
 | 3.5.5 | 事务停止服务、发布隐私 | 当时本地 208 项通过，未部署 |
 | 3.5.6 | 四项安全 / 可靠性修复与实际部署 | macOS / Debian 各 246 项通过；下述实际验证通过 |
+| 3.5.7 | 安装兼容、隐私前置条件与本地更新降级检查 | macOS 267 项通过；本次未部署 VPS |
+
+## v3.5.7 — 2026-10-20
+
+- 本机自动化 **267/267**、Bash 语法、ShellCheck 与管理脚本摘要校验通过；新增系统 / Python / OpenSSH 能力诊断、签名有效但版本较旧的本地上传拦截、双入口版本核对、确认前拒绝、严格隐私清单缺失 / 空值 / 各工具入口及 Git 跟踪检查。
+- 发行版最低支持边界为 Debian 11+ / Ubuntu 20.04+，Python 3.8+ 与 OpenSSH 客户端 8.1+。旧版本使用隔离替身和边界测试验证，Python 源码按 3.8 语法解析；不声称已在这些最低版本系统逐一实机安装。
+- 本次不连接或部署 VPS，不修改节点、sing-box Runtime、3X-UI 或 Xray。v3.5.6 的实机验收记录是历史结果，不能当作本次新版部署验收。
+- 正式发布执行 --require-private，检查当前白名单和解码引擎；发布后匿名读回附件、签名、标签、默认分支及两种自动源码下载，并独立检查公开历史与 Release 材料。
+- [已知问题与限制](../docs/KNOWN_ISSUES.md)列出仍未修复的 BBR、APT 指纹、审计性能、公网发现、根目录旧校验文件、强制中断临时对象、网络重试，以及 failed 状态停止疑点和隐私检查边界。
+
+Local regression passed **267/267** tests and covers installer dependency diagnostics, signed local-upload downgrade rejection, both installed entry points, pre-consent rejection, strict missing/empty private-list handling across publication tools and Git tracking. OS/Python/OpenSSH minimums are covered by isolated boundary tests and Python 3.8 syntax parsing, not live installation on every minimum-version distribution. This patch is not deployed to a VPS; v3.5.6 live evidence below remains historical. Publication uses the strict private-list gate and requires anonymous asset/source verification plus history/Release privacy auditing. See the [known issues](../docs/KNOWN_ISSUES.md) for outstanding items.
 
 ## v3.5.6 — 2026-10-20
 

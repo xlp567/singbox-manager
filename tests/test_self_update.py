@@ -30,6 +30,50 @@ class ManagerUpdates(unittest.TestCase):
 
     def install(self):return u.install(self.candidate,self.checksum,self.state,self.root,self.shortcut)
 
+    def test_signed_older_local_upload_refused_before_backup_or_write(self):
+        script(self.shortcut,'3.5.2');before=self.shortcut.read_bytes()
+        with self.assertRaisesRegex(ValueError,'拒绝降级'):self.install()
+        self.assertEqual(self.shortcut.read_bytes(),before)
+        self.assertEqual((self.root/'singbox-manager.sh').read_bytes(),self.old)
+        self.assertFalse((self.state/'manager-backups').exists())
+        self.assertFalse((self.state/'manager-update-pending.json').exists())
+
+    def test_either_installed_entry_can_prevent_downgrade(self):
+        script(self.root/'singbox-manager.sh','3.5.2');before=(self.root/'singbox-manager.sh').read_bytes()
+        with self.assertRaisesRegex(ValueError,'拒绝降级'):self.install()
+        self.assertEqual((self.root/'singbox-manager.sh').read_bytes(),before)
+        self.assertEqual(self.shortcut.read_bytes(),self.old)
+
+    def test_version_comparison_is_numeric_and_allows_equal(self):
+        u.check_version('3.10.0','3.9.9');u.check_version('3.5.0','3.5')
+        with self.assertRaisesRegex(ValueError,'拒绝降级'):u.check_version('3.9.9','3.10.0')
+
+    def test_menu_rejects_older_release_before_consent(self):
+        marker=self.p/'consent-prompted';stage=self.p/'menu-stage';stage.mkdir()
+        code='''source "$1"
+set -e
+TMP=$2
+CONSENT_MARKER=$3
+SBM_VERSION=3.5.2
+engine() {
+ case "$1:$2" in
+ manager-update:fetch) printf '{}';;
+ manager-update:verify-release) :;;
+ manager-update:verify) printf '{"version":"3.5.1","sha256":"fixture"}';;
+ get:*) printf '3.5.1';;
+ manager-update:check-version) shift 2; python3 -c 'import sys; from sbm.core.self_update import check_version; check_version(*sys.argv[1:])' "$@";;
+ *) exit 90;;
+ esac
+}
+confirm() { touch "$CONSENT_MARKER"; }
+manager_update_action github
+'''
+        import os
+        result=subprocess.run(['bash','-c',code,'bash',str(ROOT/'singbox-manager.sh'),str(stage),str(marker)],capture_output=True,text=True,
+            env=dict(os.environ,PYTHONPATH=str(ROOT/'src')))
+        self.assertNotEqual(result.returncode,0);self.assertIn('拒绝降级',result.stderr)
+        self.assertFalse(marker.exists())
+
     def test_local_upload_install_backs_up_both_scripts_no_service_control(self):
         run=subprocess.run
         with patch.object(u.subprocess,'run',wraps=run) as calls:report=self.install()

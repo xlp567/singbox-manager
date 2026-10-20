@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from .storage import save,sync_directory,file_digest
-from .release_trust import static_script_info,download_release,verify_directory,asset_bytes,bounded_read
+from .release_trust import static_script_info,download_release,verify_directory,asset_bytes,bounded_read,version_tuple
 
 DEFAULT_REPOSITORY='xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -52,6 +52,11 @@ def atomic_bytes(path,data,mode=0o700):
 
 
 def targets(root,shortcut):return [str(pathlib.Path(root)/'singbox-manager.sh'),str(pathlib.Path(shortcut))]
+
+
+def check_version(candidate,current):
+    if version_tuple(candidate)<version_tuple(current):
+        raise ValueError('候选管理器比当前版本更旧，拒绝降级；需要回退时请使用菜单 30 → 3 的本机备份')
 
 
 def backup_root(state):
@@ -93,6 +98,8 @@ def install(script,checksum,state,root,shortcut,trusted_rollback=False):
     if hashlib.sha256(data).hexdigest()!=info['sha256']:raise ValueError('检查期间候选脚本变化，拒绝安装')
     for p in dest:
         if pathlib.Path(p).is_symlink():raise ValueError('升级目标不得为符号链接')
+        if not trusted_rollback and pathlib.Path(p).exists():
+            check_version(info['version'],static_script_info(regular(p).read_bytes())['version'])
     if all(pathlib.Path(p).is_file() and file_digest(p)==info['sha256'] for p in dest):
         return dict(info,changed=False)
     pending=pathlib.Path(state)/'manager-update-pending.json'
@@ -197,6 +204,7 @@ def fetch(state,destination,current_version=''):
 def command(args):
     op=args[0]
     if op=='verify':print(json.dumps(verify(*args[1:]),ensure_ascii=False));return
+    if op=='check-version':return check_version(*args[1:])
     if op=='install':print(json.dumps(install(*args[1:]),ensure_ascii=False));return
     if op=='install-rollback':print(json.dumps(install(*args[1:],trusted_rollback=True),ensure_ascii=False));return
     if op=='verify-release':print(verify_directory(args[1]));return

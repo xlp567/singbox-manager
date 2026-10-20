@@ -8,12 +8,20 @@ umask 077
 # shellcheck disable=SC1091
 . /etc/os-release
 [[ $ID == debian || $ID == ubuntu ]] || { echo '仅支持 Debian/Ubuntu'; exit 1; }
+IFS=. read -r os_major os_minor _ <<<"${VERSION_ID:-}"
+[[ $os_major =~ ^[0-9]+$ && ${os_minor:-0} =~ ^[0-9]+$ ]] || { echo '无法识别系统版本；最低支持 Debian 11+ / Ubuntu 20.04+'; exit 1; }
+if [[ $ID == debian ]]; then
+    (( 10#$os_major >= 11 )) || { echo '最低支持 Debian 11+ / Ubuntu 20.04+；请先升级系统'; exit 1; }
+else
+    (( 10#$os_major > 20 || (10#$os_major == 20 && 10#${os_minor:-0} >= 4) )) || { echo '最低支持 Debian 11+ / Ubuntu 20.04+；请先升级系统'; exit 1; }
+fi
 [[ -d /run/systemd/system ]] || { echo '需要运行中的 systemd'; exit 1; }
 [[ ! -e /root/singbox-manager.sh && ! -e /usr/local/bin/sbm ]] || { echo '已有管理器，请使用 sbm 菜单 30 → 2'; exit 1; }
 if ! command -v python3 >/dev/null 2>&1 || ! command -v flock >/dev/null 2>&1 || ! command -v ssh-keygen >/dev/null 2>&1 || [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
     apt-get update
     apt-get install -y python3 ca-certificates util-linux openssh-client
 fi
+python3 -c 'import sys; sys.version_info >= (3,8) or sys.exit("需要 Python 3.8+；最低支持 Debian 11+ / Ubuntu 20.04+")'
 echo '正在验证最新正式 Release 的签名（公开仓库，无需令牌）……'
 python3 - <<'SBM_PUBLIC_BOOTSTRAP'
 """Signed formal-Release bootstrap; execution follows verification and consent."""
@@ -32,6 +40,7 @@ import os
 import pathlib
 import re
 import subprocess
+import sys
 import tempfile
 import urllib.error
 import urllib.parse
@@ -42,6 +51,20 @@ PUBLIC_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAW8DuzbY0y6ySdV3EfX0XtEe7NogBEQ
 SIGNER='singbox-manager-release'
 NAMESPACE='singbox-manager-release'
 TRUST_LIMIT=2*1024*1024
+
+
+def require_python():
+    if sys.version_info < (3,8):
+        raise ValueError('需要 Python 3.8+；最低支持 Debian 11+ / Ubuntu 20.04+，请升级系统或 Python')
+
+
+def require_supported_os(identity,version):
+    minimum={'debian':(11,0),'ubuntu':(20,4)}
+    if identity not in minimum or not re.fullmatch(r'\d+(?:\.\d+)*',version):
+        raise ValueError('仅支持 Debian 11+ / Ubuntu 20.04+；无法识别系统版本')
+    parts=tuple(map(int,(version+'.0').split('.')[:2]))
+    if parts<minimum[identity]:
+        raise ValueError('最低支持 Debian 11+ / Ubuntu 20.04+；请先升级系统，未开始安装')
 
 
 def bounded_read(response,limit=TRUST_LIMIT):
@@ -68,6 +91,7 @@ def static_script_info(data):
 
 
 def verify_signature(manifest,signature):
+    require_python()
     if len(manifest)>65536 or len(signature)>16384:raise ValueError('签名或校验清单过大')
     with tempfile.TemporaryDirectory(prefix='sbm-signature-') as folder:
         root=pathlib.Path(folder);allowed=root/'allowed_signers';sig=root/'manifest.sig'
@@ -76,7 +100,11 @@ def verify_signature(manifest,signature):
             result=subprocess.run(['ssh-keygen','-Y','verify','-f',str(allowed),'-I',SIGNER,'-n',NAMESPACE,'-s',str(sig)],
                 input=manifest,capture_output=True,timeout=15,env={'PATH':os.defpath,'LC_ALL':'C'})
         except FileNotFoundError:raise ValueError('缺少签名验证工具 ssh-keygen；请安装 openssh-client') from None
-        if result.returncode:raise ValueError('发布签名验证失败，未执行候选程序')
+        if result.returncode:
+            diagnostic=result.stderr+result.stdout
+            if re.search(rb'(?:unknown|illegal|invalid|unrecognized) option[^\r\n]*\bY\b',diagnostic,re.I):
+                raise ValueError('ssh-keygen 不支持 -Y 签名验证；需要 OpenSSH 8.1+，请升级 openssh-client（Debian 11+ / Ubuntu 20.04+）')
+            raise ValueError('发布签名验证失败，未执行候选程序')
 
 
 def parse_manifest(data,tag=None):
@@ -204,6 +232,7 @@ def consent(tag):
 
 
 def launch(token=''):
+    require_python()
     with tempfile.TemporaryDirectory(prefix='sbm-bootstrap-') as folder:
         release=read('/releases/latest',token)
         origin=download_release(API,folder,('install.py',),lambda url,t:read(url[len(API):],t),asset_bytes,token,release=release)

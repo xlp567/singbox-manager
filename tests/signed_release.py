@@ -12,12 +12,12 @@ from common import ROOT
 
 
 class SignedRelease:
-    def __init__(self,root,files=None,tag='v3.5.6',rekey_bundle=False):
+    def __init__(self,root,files=None,tag=None,rekey_bundle=False):
         self.root=pathlib.Path(root);self.root.mkdir(parents=True,exist_ok=True)
         key=self.root/'fixture-signing-key'
         subprocess.run(['ssh-keygen','-q','-t','ed25519','-N','','-f',str(key)],check=True)
         self.key=key;self.public=key.with_suffix('.pub').read_text().strip()
-        self.tag=tag;self.commit='a'*40
+        self.tag=tag or 'v'+re.search(rb'^SBM_VERSION=([0-9.]+)$',(ROOT/'singbox-manager.sh').read_bytes(),re.M)[1].decode();self.commit='a'*40
         if files is None:
             data=(ROOT/'singbox-manager.sh').read_bytes()
             if rekey_bundle:data=self.rekey(data)

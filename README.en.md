@@ -4,13 +4,17 @@
 
 [简体中文](README.md) · English · [English user guide](docs/USER_GUIDE.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md)
 
-![Version](https://img.shields.io/badge/version-3.5.6-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.5.7-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [Official project releases and downloads](https://github.com/xlp567/singbox-manager/releases/latest) include source, the standalone manager, installation entries, SHA-256 manifest and Ed25519 signature.
 
+[Known issues and limits](docs/KNOWN_ISSUES.md)
+
 ## Quick start
 
-Log in to a new **Debian / Ubuntu VPS** as root and run:
+Minimum supported systems: **Debian 11+ / Ubuntu 20.04+**, with **Python 3.8+, OpenSSH client 8.1+, Bash 4+ and running systemd**. Debian 10 and Ubuntu 18.04 are unsupported. The installer checks OS/Python versions and reports unsupported signature tools explicitly. File signatures were introduced in [OpenSSH 8.1](https://www.openssh.org/txt/release-8.1); `Path.unlink(missing_ok=...)` requires [Python 3.8](https://docs.python.org/3/library/pathlib.html#pathlib.Path.unlink).
+
+Log in as root to a new VPS meeting these requirements and run:
 
 ```bash
 bash <(curl -fsSL https://github.com/xlp567/singbox-manager/releases/latest/download/install.sh)
