@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 # Stable management core: runtime. Bundled by tools/build.py.
+# SagerNet APT signing key (Project S <contact@sagernet.org>). Cross-checked on
+# 2026-10-20: identical key from sing-box.app and deb.sagernet.org, and the same
+# full fingerprint in several independent public deployment projects.
+SAGERNET_KEY_FPR=2C317FBD5D886B4E89BAE8DA6D9152172A2B2F0C
+sagernet_key_check() {
+    # Exactly one primary key whose full fingerprint equals the pinned value.
+    local listing pubs fpr
+    listing=$(gpg --batch --with-colons --show-keys "$1" 2>/dev/null) || return 1
+    pubs=$(awk -F: '$1=="pub"' <<<"$listing" | wc -l)
+    fpr=$(awk -F: '$1=="fpr" {print $10; exit}' <<<"$listing")
+    (( pubs == 1 )) && [[ $fpr == "$SAGERNET_KEY_FPR" ]]
+}
 repo_setup() {
     curl --proto '=https' --tlsv1.2 -fsSL --retry 2 --max-time 45 https://sing-box.app/gpg.key -o "$TMP/sagernet.asc"
-    gpg --batch --show-keys "$TMP/sagernet.asc" >/dev/null
+    sagernet_key_check "$TMP/sagernet.asc" || die "SagerNet APT 公钥指纹与固定值 ${SAGERNET_KEY_FPR} 不符（或包含多把主密钥），未写入 APT 源。若官方已更换密钥，请从官方渠道独立核实后升级管理器。"
     install -d -m 755 /etc/apt/keyrings
     install -m 644 "$TMP/sagernet.asc" /etc/apt/keyrings/sagernet.asc
     cat >/etc/apt/sources.list.d/sagernet.sources <<'REPO'

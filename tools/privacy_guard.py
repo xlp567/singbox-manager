@@ -15,7 +15,7 @@ V6 = re.compile(r'(?<![\w:])(?:[0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F:.]*(?![\w:])')
 SECRET = re.compile(r'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}')
 BUNDLE = re.compile(r"<<'SBM_BUNDLE'\n([A-Za-z0-9+/=\s]+)\nSBM_BUNDLE")
 DOC_NETS = tuple(ipaddress.ip_network(n) for n in ('192.0.2.0/24','198.51.100.0/24','203.0.113.0/24','2001:db8::/32'))
-PUBLIC_HOSTS = ('anthropic.com','github.com','githubusercontent.com','githubassets.com','sagernet.org','sing-box.app','ipify.org','shields.io','json-schema.org','letsencrypt.org','openssh.com','openssh.org','python.org','example.com','example.org','example.net','example','invalid','test','localhost')
+PUBLIC_HOSTS = ('anthropic.com','github.com','githubusercontent.com','githubassets.com','sagernet.org','sing-box.app','ipify.org','icanhazip.com','checkip.amazonaws.com','shields.io','json-schema.org','letsencrypt.org','openssh.com','openssh.org','python.org','example.com','example.org','example.net','example','invalid','test','localhost')
 POLICY_NETWORKS={'224.0.0.0/4','ff00::/8','64:ff9b::/96','64:ff9b:1::/48','2002::/16','2001::/32'}
 # Conservative bare-host detection complements structured fields and URLs.
 # It deliberately does not treat Python attributes or arbitrary file suffixes

@@ -286,13 +286,15 @@ def verify_dns(m):
     if not names:
         network_policy.stamp(m,local_addresses);return
     public=set()
-    for family,url in [(socket.AF_INET,'https://api.ipify.org'),(socket.AF_INET6,'https://api6.ipify.org')]:
-        try:
-            s=subprocess.check_output(['curl','-4' if family==socket.AF_INET else '-6','-fsS','--connect-timeout','5','--max-time','10',url],stderr=subprocess.DEVNULL,text=True).strip()
-            public.add(ipaddress.ip_address(s))
-        except (subprocess.CalledProcessError,ValueError): pass
-    if not public: fail('无法检测本机公网 IP；请检查网络后重试')
-    print('检测到公网 IP：'+', '.join(map(str,sorted(public,key=str))))
+    for family in (4,6):
+        address,source=network_policy.detect_public(family,runner=subprocess.check_output)
+        if address: public.add(address); print(f'IPv{family} 出口地址：{address}（{source.split("/")[2]}）')
+    interface={a for a in map(ipaddress.ip_address,local_addresses) if network_policy.is_public(a)}
+    if interface: print('本机网卡公网地址：'+', '.join(map(str,sorted(interface,key=str))))
+    confirmed=set(network_policy.confirmed_load())
+    if confirmed: print('管理员已确认地址：'+', '.join(map(str,sorted(confirmed,key=str))))
+    public|=interface|confirmed
+    if not public: fail('无法确定本机公网 IP：外部检测源均不可达，网卡上也没有公网地址。NAT / 浮动 IP 主机可先运行 sbm security public-ip add <公网IP> 确认后重试')
     has6=False
     for name in sorted(names):
         try: addresses={ipaddress.ip_address(name)}
@@ -306,7 +308,7 @@ def verify_dns(m):
                     try: addresses.add(ipaddress.ip_address(line.strip()))
                     except ValueError: pass
         print(name+' => '+(', '.join(map(str,sorted(addresses,key=str))) or '无解析'))
-        if not addresses or not addresses.issubset(public): fail('节点地址未全部匹配本机公网 IP；检查 A/AAAA、CDN、多 IP/NAT。脚本不会跳过')
+        if not addresses or not addresses.issubset(public): fail('节点地址未全部匹配本机公网 IP；检查 A/AAAA、CDN。若主机经 NAT / 浮动 IP 对外提供该地址，可用 sbm security public-ip add <IP> 确认后重试')
         has6 |= any(x.version==6 for x in addresses)
     for n in m['nodes']:
         if n['enabled']: protocol(n['kind']).netcheck(n, CTX)

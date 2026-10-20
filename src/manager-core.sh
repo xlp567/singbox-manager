@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.5.9 - transactional core and independent protocol adapters
+# singbox-manager v3.6.0 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,8 +15,13 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.5.9
+SBM_VERSION=3.6.0
 SHORTCUT=/usr/local/bin/sbm
+# Used by service.sh bundled below; tests redirect them.
+# shellcheck disable=SC2034
+BBR_CONF=/etc/sysctl.d/90-singbox-manager-bbr.conf
+# shellcheck disable=SC2034
+CC_AVAILABLE=/proc/sys/net/ipv4/tcp_available_congestion_control
 TMP=''; TX=''; CANDIDATE=''; ACTION_ID=manual
 # Shared with transactions.sh bundled below.
 # shellcheck disable=SC2034
@@ -39,7 +44,7 @@ confirm() {
         esac
     done
 }
-engine() { SBM_PROTOCOL_DIR="$STATE/protocols" python3 "$TMP/engine.pyz" "$@"; }
+engine() { SBM_PROTOCOL_DIR="$STATE/protocols" SBM_STATE="$STATE" python3 "$TMP/engine.pyz" "$@"; }
 audit_record() {
     if [[ -n $TMP && -f $TMP/engine.pyz ]] && command -v python3 >/dev/null; then
         engine audit-append "$STATE/audit.jsonl" "$1" "$ACTION_ID" "$2" "${3:-}" || {
@@ -64,6 +69,18 @@ security_action() {
         mode=apply
     fi
     if [[ $mode == status ]]; then engine security-status "$CONF/manager.json" "$CONF/config.json" "${2:-}";return;fi
+    if [[ $mode == public-ip ]]; then
+        case ${2:-show} in
+            show) engine public-ip "$STATE" show;;
+            add|remove) [[ -n ${3:-} ]] || die '请提供公网 IP。'
+                local verb=加入; [[ $2 == add ]] || verb=移出
+                confirm "将 ${3} ${verb}已确认公网地址（只用于节点地址核对，不改节点、不重启服务）" || return 0
+                engine public-ip "$STATE" "$2" "$3";;
+            clear) confirm '清空已确认公网地址' || return 0; engine public-ip "$STATE" clear;;
+            *) die '公网地址操作无效（show / add / remove / clear）。';;
+        esac
+        return
+    fi
     [[ $mode == apply ]] || die '出口安全操作无效。'
     [[ ! -e $STATE/draft.json && ! -L $STATE/draft.json ]] || die '有未提交草稿；请先用菜单 22 继续、归档或清理，再应用安全策略。'
     say '将禁止代理访问本机、内网、链路本地和元数据地址；节点凭据保持不变。'
@@ -494,6 +511,7 @@ singbox-manager v$SBM_VERSION
   runtime     查看实际运行程序的版本和构建能力，可加 --json
   audit       校验本地审计链，可加 --json；repair 确认后隔离损坏文件并开新链
   security    出口安全：status [--json] / apply（备份后应用，重启 sing-box）
+              public-ip show|add|remove|clear：确认 NAT / 浮动 IP 的本机公网地址
   version     显示脚本版本
   help        显示本帮助
 USAGE
@@ -539,7 +557,7 @@ action() (
         30) manager_update_action;;
         31) security_action;;
         audit-repair) confirm '保留损坏审计原件，开新链并记录旧链最后有效哈希（不改服务）' && engine audit-repair "$STATE/audit.jsonl";;
-        security) security_action "${2:-menu}" "${3:-}";;
+        security) security_action "${2:-menu}" "${3:-}" "${4:-}";;
         self-update) manager_update_action "${2:-menu}" "${3:-}";;
         protocols) if [[ ${2:-} == --json ]]; then engine protocols --json; else engine protocols --text; fi;;
         compat) require_managed; prepare_model; engine compatibility "$TMP/model.json" "$(active_binary)" "${2:-}";;
@@ -582,11 +600,17 @@ main() {
         case ${2:-menu} in
             menu|apply) (( $#<=2 )) || die '出口安全参数过多。';;
             status) (( $#<=3 )) || die '参数过多。'; [[ -z ${3:-} || ${3:-} == --json ]] || die '仅支持 --json。';;
+            public-ip)
+                case ${3:-show} in
+                    show|clear) (( $#<=3 )) || die '参数过多。';;
+                    add|remove) (( $#==4 )) || die '用法：sbm security public-ip add|remove <公网IP>';;
+                    *) die '公网地址操作无效（show / add / remove / clear）。';;
+                esac;;
             *) die '出口安全操作无效。';;
         esac
         require_host cli
         [[ ! -f $STATE/pending ]] || die '请先恢复未完成事务。'
-        action security "${2:-menu}" "${3:-}"
+        action security "${2:-menu}" "${3:-}" "${4:-}"
         return
     fi
     if [[ ${1:-} == self-update ]]; then

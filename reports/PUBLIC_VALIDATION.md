@@ -13,6 +13,15 @@
 | 3.5.7 | 安装兼容、隐私前置条件与本地更新降级检查 | macOS 267 项通过；本次未部署 VPS |
 | 3.5.8 | 停止状态、DNS 失败提示、暂存清理、根校验文件、统一重试 | macOS 281 项通过；本次未部署 VPS |
 | 3.5.9 | 截断响应检测与重试、元数据解析错误提示 | macOS 289 项通过；本次未部署 VPS |
+| 3.6.0 | BBR 原设置恢复、APT 指纹固定、审计分段轮转、多源公网地址 | macOS 311 项通过；本次未部署 VPS |
+
+## v3.6.0 — 2026-10-20
+
+- 本机自动化 **311/311**、Bash 语法、ShellCheck 与管理脚本摘要校验通过。新增：BBR 开启 / 关闭 / 取消 / 被拒绝 / 旧版无记录 / 记录无效六种路径（sysctl 替身）；APT 公钥指纹一致、不一致、多主密钥、gpg 失败，以及指纹不符时不写入 APT 文件；审计分段轮转、封存段篡改检测、首行链接校验、按链保留与清理崩溃遗留段、旧日志兼容、4 进程并发写入；公网检测源回退、仅 HTTPS、拒绝私网 / 错误协议族、网卡公网地址、管理员确认地址及 CLI 参数校验。
+- 过程中发现并修复：同一秒内封存的段名不保证排序，按名称清理可能误删最新段；改为沿哈希链保留最新段。
+- APT 指纹于 2026-10-20 核对：sing-box.app 与 deb.sagernet.org 返回相同公钥，主密钥指纹与多个独立公开部署项目记载一致。BBR 使用 sysctl 替身验证，未在真实内核上切换；本次不连接或部署 VPS。
+
+Local regression passed **311/311** tests covering BBR record/restore paths (sysctl double), APT fingerprint acceptance and rejection before any APT file is written, audit rotation (sealed-segment tampering, link checks, chain-based retention, crash orphans, legacy logs, four concurrent writers), and multi-source public-address detection with interface and operator-confirmed addresses. A same-second segment-ordering pruning bug was found and fixed during testing. The APT fingerprint was cross-checked on 2026-10-20. BBR was not toggled on a real kernel; not deployed to a VPS.
 
 ## v3.5.9 — 2026-10-20
 

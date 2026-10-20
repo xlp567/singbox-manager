@@ -153,7 +153,7 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.9`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
+若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.6.0`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
 
 - `singbox-manager.sh`：合并 Bash 管理层与 Python 引擎的独立管理脚本。
 - `singbox-manager.sha256`：上述脚本的 SHA-256 摘要。
@@ -203,7 +203,7 @@ PY
 
 ### 审计损坏
 
-审计写入失败会明确警告，不再阻断启停、快照或恢复。先保存 `audit.jsonl`，执行 `sbm audit repair` 并确认：原文件以 `audit.jsonl.corrupt-时间-标识` 保留（600），新链记录原文件摘要及最后一个有效哈希。`sbm audit --json` 可核对新链；不要手工截断后宣称链完整。该链能检测损坏，不能防止 root 重写；追加时仍需校验整条链。
+审计写入失败会明确警告，不再阻断启停、快照或恢复。先保存 `audit.jsonl`，执行 `sbm audit repair` 并确认：原文件以 `audit.jsonl.corrupt-时间-标识` 保留（600），新链记录原文件摘要及最后一个有效哈希。`sbm audit --json` 可核对新链；不要手工截断后宣称链完整。该链能检测损坏，不能防止 root 重写。v3.6.0 起追加只校验当前段，见第 16 节。
 
 ### 备份空间
 
@@ -245,3 +245,11 @@ SHA256:iBBDFzAHqEHERHmSi/RbV9IEW8xBeuWcIV3ZkGMotE4
 ## 15. v3.5.9 截断响应修复
 
 GitHub 响应在中途断开、实际收到的字节少于声明长度时，会作为网络故障自动重试（最多 3 次），不会再把半截数据当作完整结果。元数据仍不完整或格式无效时，菜单 30 和两个安装入口提示“响应不完整或格式无效”，不修改管理脚本，也不安装任何文件。
+
+
+## 16. v3.6.0 已知问题修复
+
+- **BBR（菜单 27）**：开启前把当前拥塞算法和队列规则记录到 `/var/lib/singbox-manager/bbr-original.conf`，关闭时恢复这两项；旧版开启、没有记录的主机关闭时仍回退为 cubic。BBR 是整机参数，开启期间会影响本机其他 TCP 服务。
+- **APT 公钥**：安装官方 sing-box 时，下载的 SagerNet 公钥必须恰好一把主密钥，且完整指纹为 `2C317FBD5D886B4E89BAE8DA6D9152172A2B2F0C`，否则不写入 APT 源。菜单 12 会检查已安装的 `/etc/apt/keyrings/sagernet.asc`。
+- **审计日志**：当前段达到 5000 条或 2 MiB 时自动封存为只读 `audit.jsonl.<时间>-<编号>.gz`，新段首行记录上一段的摘要和最后哈希。`sbm audit` 显示当前段与已封存段的核对结果；保留最近 20 段。
+- **公网地址核对**：依次尝试多个 HTTPS 检测源，并合并网卡上的公网地址。NAT / 浮动 IP 主机可执行 `sbm security public-ip add <公网IP>`；`show` 查看、`remove <IP>` 移除、`clear` 清空。只接受公网地址，不修改节点、不重启服务。

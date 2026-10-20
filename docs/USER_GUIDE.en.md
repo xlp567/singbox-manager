@@ -153,7 +153,7 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-To inspect a published version, check out its tag first, for example `git checkout v3.5.9`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
+To inspect a published version, check out its tag first, for example `git checkout v3.6.0`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
 
 - `singbox-manager.sh`: the combined Bash management layer and bundled Python engine.
 - `singbox-manager.sha256`: the SHA-256 checksum of that script.
@@ -203,7 +203,7 @@ An existing unfinished draft blocks security application rather than being overw
 
 ### Damaged audit log
 
-Failed audit writes warn without blocking operations. Preserve `audit.jsonl`, then run `sbm audit repair` and confirm. The original becomes `audit.jsonl.corrupt-<time>-<id>` with mode 600; the new chain records its digest and last valid hash. Use `sbm audit --json` to verify. Do not silently truncate and claim an intact chain. This detects corruption, not privileged rewriting; appends still verify the whole chain.
+Failed audit writes warn without blocking operations. Preserve `audit.jsonl`, then run `sbm audit repair` and confirm. The original becomes `audit.jsonl.corrupt-<time>-<id>` with mode 600; the new chain records its digest and last valid hash. Use `sbm audit --json` to verify. Do not silently truncate and claim an intact chain. This detects corruption, not privileged rewriting. From v3.6.0 appends verify only the current segment; see section 16.
 
 ### Backup storage
 
@@ -245,3 +245,11 @@ See [known issues and limits](KNOWN_ISSUES.md) for outstanding items.
 ## 15. v3.5.9 truncated-response fix
 
 When a GitHub response ends before its declared length, the read is treated as a transient network failure and retried (up to 3 attempts) instead of returning partial data. If metadata is still incomplete or malformed, menu 30 and both bootstrap entry points report an incomplete/invalid response, change no manager script and install nothing.
+
+
+## 16. v3.6.0 known-issue fixes
+
+- **BBR (menu 27)**: before enabling, the current congestion control and qdisc are recorded in `/var/lib/singbox-manager/bbr-original.conf` and restored when disabled. Hosts enabled by older versions without a record still fall back to cubic. BBR is host-wide and affects other TCP services while enabled.
+- **APT key**: when installing official sing-box, the downloaded SagerNet key must contain exactly one primary key with full fingerprint `2C317FBD5D886B4E89BAE8DA6D9152172A2B2F0C`, otherwise no APT source is written. Menu 12 checks the installed `/etc/apt/keyrings/sagernet.asc`.
+- **Audit log**: at 5000 entries or 2 MiB the current segment is sealed as read-only `audit.jsonl.<time>-<id>.gz`; the next segment's first row records the sealed segment's digest and last hash. `sbm audit` reports the current and sealed segments; the newest 20 are kept.
+- **Public-address check**: several HTTPS sources are tried and global interface addresses are included. NAT/floating-IP hosts can run `sbm security public-ip add <public IP>`; use `show`, `remove <IP>` and `clear` to manage the list. Only public addresses are accepted; nodes and services are unchanged.

@@ -1,5 +1,17 @@
 # Changelog / 更新记录
 
+## 3.6.0 — 2026-10-20
+
+- BBR（菜单 27）开启前记录原拥塞算法与队列规则，关闭时恢复这两项；开启被系统拒绝时也恢复。旧版开启、没有记录的主机仍回退为 cubic，并重新加载系统 sysctl 配置。
+- SagerNet APT 公钥固定完整指纹 `2C317FBD5D886B4E89BAE8DA6D9152172A2B2F0C`：必须恰好一把主密钥且指纹一致才写入 APT 源；菜单 12 检查已安装公钥。指纹由两个官方地址的同一公钥与多个独立公开项目交叉核对。
+- 审计日志分段轮转：当前段达到 5000 条或 2 MiB 时封存为只读 gzip，新段首行用哈希链接上一段，追加只校验当前段；保留最近 20 段，`sbm audit` 逐段核对摘要与链接。旧审计文件无需迁移。
+- 公网地址核对不再只依赖 ipify：每个协议族依次尝试多个 HTTPS 检测源，并合并网卡上的公网地址；NAT / 浮动 IP 主机可用 `sbm security public-ip add <IP>` 确认地址（只接受公网地址，不改节点、不重启服务）。
+
+- BBR (menu 27) records the original congestion control and qdisc before enabling and restores both when disabled, including after a rejected enable. Hosts enabled by older versions without a record still fall back to cubic and reload system sysctl settings.
+- Pin the SagerNet APT key's full fingerprint `2C317FBD5D886B4E89BAE8DA6D9152172A2B2F0C`; exactly one primary key must match before APT sources are written, and menu 12 checks the installed key. The fingerprint was cross-checked across both official endpoints and several independent public projects.
+- Rotate the audit log: at 5000 entries or 2 MiB the current segment is sealed as read-only gzip and the next segment's first row links its hash. Appends verify only the current segment; the newest 20 segments are kept and `sbm audit` verifies each digest and link. Existing logs need no migration.
+- Public-address checks no longer depend on ipify alone: several HTTPS sources are tried per family and global interface addresses are included. NAT/floating-IP hosts can confirm addresses with `sbm security public-ip add <IP>` (public addresses only; no node or service change).
+
 ## 3.5.9 — 2026-10-20
 
 - 修复连接中途断开时响应被静默截断：声明了 Content-Length 的响应提前结束时，读取函数现在报告不完整读取，交给共享重试（最多 3 次），不再把半截数据当作完整结果。

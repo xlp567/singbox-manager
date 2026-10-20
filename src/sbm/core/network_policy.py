@@ -1,6 +1,8 @@
 """Public Internet egress only; shared by every server protocol adapter."""
 import ipaddress
 import json
+import os
+import pathlib
 import subprocess
 
 POLICY='public-only-v1'
@@ -77,3 +79,65 @@ def status(model,config,compiled):
     return {'policy':POLICY,'applied':current,'legacy_recognized':not current and matches(model,config,compiled),
             'local_address_count':len(model.get('security',{}).get('local_addresses',[])),
             'requires_apply':not current,'scope':'proxy egress only; does not change SSH, firewall, 3X-UI or Xray'}
+
+
+# Public-address discovery for the node DNS check. Several HTTPS sources are tried
+# per family; global interface addresses and operator-confirmed addresses
+# (NAT / floating IP) are combined with whatever the sources report.
+PUBLIC_IP_SOURCES={4:('https://api.ipify.org','https://ipv4.icanhazip.com','https://checkip.amazonaws.com'),
+                   6:('https://api6.ipify.org','https://ipv6.icanhazip.com')}
+CONFIRMED_LIMIT=64
+
+
+def is_public(address):return address.is_global
+
+
+def detect_public(family,sources=None,runner=subprocess.check_output):
+    for url in (sources or PUBLIC_IP_SOURCES[family]):
+        try:
+            text=runner(['curl','-'+str(family),'--proto','=https','-fsS','--connect-timeout','5','--max-time','10',url],
+                        stderr=subprocess.DEVNULL,text=True,timeout=20).strip()
+            address=ipaddress.ip_address(text)
+        except (subprocess.CalledProcessError,subprocess.TimeoutExpired,OSError,ValueError):continue
+        if address.version==family and is_public(address):return address,url
+    return None,None
+
+
+def confirmed_path(state=None):
+    state=state or os.environ.get('SBM_STATE','')
+    return pathlib.Path(state)/'public-addresses.json' if state else None
+
+
+def confirmed_load(state=None):
+    path=confirmed_path(state)
+    if path is None or not path.exists():return []
+    if path.is_symlink() or not path.is_file():raise ValueError('已确认公网地址文件不得为符号链接')
+    data=json.loads(path.read_text())
+    rows=data.get('addresses') if isinstance(data,dict) and data.get('format')==1 else None
+    if not isinstance(rows,list) or len(rows)>CONFIRMED_LIMIT:raise ValueError('已确认公网地址文件无效')
+    return sorted({_global(row) for row in rows},key=lambda a:(a.version,int(a)))
+
+
+def _global(value):
+    try:address=ipaddress.ip_address(str(value).strip())
+    except ValueError:raise ValueError('不是有效 IP 地址：'+str(value)) from None
+    if not is_public(address):raise ValueError('只能确认公网地址，拒绝私网 / 回环 / 保留地址：'+str(address))
+    return address
+
+
+def confirmed_command(state,op,value=''):
+    from .storage import save
+    current=confirmed_load(state)
+    if op=='show':
+        print('已确认的本机公网地址：'+(', '.join(map(str,current)) if current else '无'))
+        print('用途：NAT / 浮动 IP 等出口地址与入口地址不同的主机；只用于节点地址核对，不修改节点或服务。');return
+    if op=='add':current=sorted(set(current)|{_global(value)},key=lambda a:(a.version,int(a)))
+    elif op=='remove':
+        target=_global(value)
+        if target not in current:raise ValueError('该地址不在已确认列表中：'+str(target))
+        current=[a for a in current if a!=target]
+    elif op!='clear':raise ValueError('公网地址操作无效（show / add / remove / clear）')
+    else:current=[]
+    if len(current)>CONFIRMED_LIMIT:raise ValueError('已确认公网地址过多')
+    save(confirmed_path(state),{'format':1,'addresses':[str(a) for a in current]})
+    print('已保存：'+(', '.join(map(str,current)) if current else '列表已清空'))

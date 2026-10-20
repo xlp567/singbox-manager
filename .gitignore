@@ -13,6 +13,9 @@ config.json
 draft.json
 github-token
 update-source.json
+public-addresses.json
+bbr-original.conf
+audit.jsonl*
 *.pem
 *.key
 .env

@@ -10,6 +10,11 @@ from sbm.core import release_trust, self_update
 
 
 class DnsLookupFailure(unittest.TestCase):
+    def setUp(self):
+        # Fixtures use the RFC 5737 documentation range, which Python does not call global.
+        public=lambda address:address.is_global or str(address).startswith('203.0.113.')
+        patcher=patch.object(engine.network_policy,'is_public',side_effect=public);patcher.start();self.addCleanup(patcher.stop)
+
     def test_dig_failure_reports_the_name_instead_of_a_raw_command_error(self):
         m=model();m['nodes']=[m['nodes'][0]]
         def run(command,**kwargs):
@@ -19,6 +24,7 @@ class DnsLookupFailure(unittest.TestCase):
             if command[0]=='dig':raise subprocess.CalledProcessError(9,command)
             raise AssertionError(command)
         with patch.object(engine.network_policy,'collect_local',return_value=[]),\
+             patch.object(engine.network_policy,'confirmed_load',return_value=[]),\
              patch.object(engine.subprocess,'check_output',side_effect=run):
             with self.assertRaisesRegex(ValueError,'node.example.com.*dig 超时或失败'):engine.verify_dns(m)
 
@@ -28,6 +34,7 @@ class DnsLookupFailure(unittest.TestCase):
             if command[0]=='curl':return '203.0.113.5\n'
             seen.append(kwargs.get('timeout'));raise subprocess.TimeoutExpired(command,kwargs.get('timeout'))
         with patch.object(engine.network_policy,'collect_local',return_value=[]),\
+             patch.object(engine.network_policy,'confirmed_load',return_value=[]),\
              patch.object(engine.subprocess,'check_output',side_effect=run),self.assertRaises(ValueError):
             engine.verify_dns(m)
         self.assertEqual(seen,[15])

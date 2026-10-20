@@ -22,7 +22,8 @@ class Entrypoints(unittest.TestCase):
         self.assertEqual(cases,set(range(1,32)))
 
     def test_help_version_run_without_root_or_dependencies(self):
-        for command,expected in [('help','upgrade'),('version','v3.5')]:
+        version=re.search(r'^SBM_VERSION=(\S+)$',(ROOT/'src/manager-core.sh').read_text(),re.M)[1]
+        for command,expected in [('help','upgrade'),('version','v'+version)]:
             out=subprocess.check_output(['bash',str(ROOT/'singbox-manager.sh'),command],text=True)
             self.assertIn(expected,out)
 

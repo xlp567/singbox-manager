@@ -17,6 +17,9 @@ def main():
     if command=='manager-update':
         from .core.self_update import command as update_command
         return update_command(args)
+    if command=='public-ip':
+        from .core.network_policy import confirmed_command
+        return confirmed_command(*args)
     if command=='audit-repair':print(json.dumps(audit.repair(args[0]),ensure_ascii=False));return
     commands={'runtime-backup':storage.runtime_backup,'snapshot-kind':storage.snapshot_kind,
               'prune-automatic':storage.prune_automatic,'snapshot-space':storage.snapshot_space,
@@ -62,7 +65,11 @@ def main():
     if command=='audit-verify':
         report=audit.verify(args[0])
         if '--json' in args:print(json.dumps(report))
-        else:print(f"审计链：通过 | {report['entries']} 条记录 | {report['last_hash']}")
+        else:
+            print(f"审计链：通过 | 当前段 {report['entries']} 条记录 | {report['last_hash']}")
+            if report['segments'] or report['history_truncated']:
+                print(f"已封存段：{report['segments']} 个，共 {report['sealed_entries']} 条，摘要与链接均通过"+
+                      ("；更早的段已按保留策略清理" if report['history_truncated'] else ''))
         return
     if command=='runtime-info':
         info=Runtime(args[0]).info()

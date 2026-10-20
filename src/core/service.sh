@@ -85,6 +85,10 @@ diagnostics() {
     engine dashboard "$CONF" "$STATE" "$(current_version)"
     say '---------------------- 检查 ----------------------'
     if "$b" check -c "$CONF/config.json"; then say '配置检查：通过'; else say '配置检查：失败 ⚠（见上方错误）'; fi
+    if [[ -f /etc/apt/keyrings/sagernet.asc ]]; then
+        if sagernet_key_check /etc/apt/keyrings/sagernet.asc; then say "APT 公钥：指纹与固定值一致（${SAGERNET_KEY_FPR}）"
+        else say 'APT 公钥：指纹与固定值不符 ⚠ 请从官方渠道核实 /etc/apt/keyrings/sagernet.asc'; fi
+    fi
     say 'sing-box 正在监听：'
     ss -Hlntup | awk '/"sing-box"/ {print "  " $1 " " $5}' || true
     engine logsummary
@@ -94,26 +98,55 @@ diagnostics() {
     fi
     say '提示：完整日志用菜单 13；本机检查不能替代外网客户端实测，UDP 节点需客户端实际连接。'
 }
+bbr_original_restore() {
+    # Restores the runtime values recorded before this manager enabled BBR.
+    local saved=$1 cc qdisc
+    cc=$(sed -n 's/^tcp_congestion_control=\([a-z0-9_]\{1,32\}\)$/\1/p' "$saved")
+    qdisc=$(sed -n 's/^default_qdisc=\([a-z0-9_]\{1,32\}\)$/\1/p' "$saved")
+    [[ -n $cc && -n $qdisc ]] || return 1
+    grep -qw -- "$cc" "$CC_AVAILABLE" || return 1
+    sysctl -w "net.ipv4.tcp_congestion_control=$cc" >/dev/null || return 1
+    sysctl -w "net.core.default_qdisc=$qdisc" >/dev/null || return 1
+}
 bbr_action() {
-    local f=/etc/sysctl.d/90-singbox-manager-bbr.conf cc
+    local f=$BBR_CONF saved=$STATE/bbr-original.conf cc qdisc
     cc=$(sysctl -n net.ipv4.tcp_congestion_control)
     if [[ -f $f ]]; then
         say "当前拥塞控制：${cc}（由本脚本开启）。"
-        confirm '关闭本脚本开启的 BBR，恢复为 cubic' || return 0
+        if [[ -f $saved && ! -L $saved ]]; then
+            confirm '关闭本脚本开启的 BBR，恢复开启前的拥塞算法与队列规则' || return 0
+        else
+            confirm '关闭本脚本开启的 BBR（旧版开启时未记录原设置，将恢复为 cubic 并重新加载系统 sysctl 配置）' || return 0
+        fi
         rm -f "$f"
-        sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null
         sysctl --system >/dev/null 2>&1 || true
+        if [[ -f $saved && ! -L $saved ]]; then
+            if bbr_original_restore "$saved"; then rm -f "$saved"
+            else say '警告：记录的原设置无效或内核不再支持，已回退为 cubic；请检查 sysctl 配置。' >&2
+                sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null; fi
+        else
+            sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null
+        fi
         say "已关闭：当前 $(sysctl -n net.ipv4.tcp_congestion_control) / $(sysctl -n net.core.default_qdisc)"
         return 0
     fi
     if [[ $cc == bbr ]]; then say '系统已在使用 BBR（不是本脚本设置的），无需操作。'; return 0; fi
-    grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control || modprobe tcp_bbr 2>/dev/null || true
-    grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control || die '内核不支持 BBR（部分 OpenVZ/LXC 容器无法修改），未做改动。'
-    say "当前拥塞控制：${cc}。"
+    grep -qw bbr "$CC_AVAILABLE" || modprobe tcp_bbr 2>/dev/null || true
+    grep -qw bbr "$CC_AVAILABLE" || die '内核不支持 BBR（部分 OpenVZ/LXC 容器无法修改），未做改动。'
+    qdisc=$(sysctl -n net.core.default_qdisc)
+    say "当前拥塞控制：${cc}；队列规则：${qdisc}。"
     say 'BBR 可改善 TCP 节点（AnyTLS/Trojan/VLESS/Reality/VMess/Naive/Shadowsocks）在高延迟、丢包线路上的速度；Hysteria2/TUIC 自带拥塞控制，不受影响。'
+    say '注意：这是整机 TCP 参数，会同时影响本机其他 TCP 服务；关闭时恢复当前记录的设置。'
     confirm "写入 $f 开启 BBR + fq（立即生效，重启后保持，可随时在此关闭）" || return 0
+    [[ $cc =~ ^[a-z0-9_]{1,32}$ && $qdisc =~ ^[a-z0-9_]{1,32}$ ]] || die '无法识别当前拥塞控制设置，未做改动。'
+    [[ ! -L $saved ]] || die "原设置记录为符号链接，请人工核查：$saved"
+    printf '# Runtime values before singbox-manager enabled BBR\ntcp_congestion_control=%s\ndefault_qdisc=%s\n' "$cc" "$qdisc" >"$saved"
+    chmod 600 "$saved"
     printf '# Managed by singbox-manager.sh\nnet.core.default_qdisc=fq\nnet.ipv4.tcp_congestion_control=bbr\n' >"$f"
-    if ! sysctl -p "$f" >/dev/null; then rm -f "$f"; die '系统拒绝修改该参数（可能是容器环境），已撤销。'; fi
+    if ! sysctl -p "$f" >/dev/null; then
+        rm -f "$f"; bbr_original_restore "$saved" || true; rm -f "$saved"
+        die '系统拒绝修改该参数（可能是容器环境），已撤销。'
+    fi
     say "已开启：$(sysctl -n net.ipv4.tcp_congestion_control) / $(sysctl -n net.core.default_qdisc)"
 }
 uninstall_action() {
