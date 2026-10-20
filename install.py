@@ -72,7 +72,16 @@ def bounded_read(response,limit=TRUST_LIMIT):
         if not chunk:break
         chunks.append(chunk);total+=len(chunk)
     if total>limit:raise ValueError('发布响应超过大小限制')
-    return b''.join(chunks)
+    data=b''.join(chunks)
+    # http.client read(amt) returns b'' on early EOF instead of raising; surface it
+    # as IncompleteRead so retrying() treats a dropped connection as transient.
+    remaining=getattr(response,'length',None)
+    headers=getattr(response,'headers',None)
+    declared=headers.get('Content-Length','') if hasattr(headers,'get') else ''
+    expected=int(declared) if isinstance(declared,str) and declared.isdigit() else None
+    if (type(remaining) is int and remaining>0) or (expected is not None and total<expected):
+        raise http.client.IncompleteRead(data,remaining if type(remaining) is int and remaining>0 else expected-total)
+    return data
 
 
 def version_tuple(value):
@@ -226,7 +235,8 @@ def request(path,token):
     except (urllib.error.URLError,OSError,http.client.HTTPException):
         raise ValueError('无法连接 GitHub（已重试），安装未完成') from None
     if len(data)>LIMIT:raise ValueError('GitHub 安装响应过大')
-    value=json.loads(data)
+    try:value=json.loads(data)
+    except ValueError:raise ValueError('GitHub 安装响应不完整或格式无效，安装未完成') from None
     if not isinstance(value,dict):raise ValueError('GitHub 安装响应格式异常')
     return value
 

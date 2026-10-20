@@ -12,6 +12,14 @@
 | 3.5.6 | 四项安全 / 可靠性修复与实际部署 | macOS / Debian 各 246 项通过；下述实际验证通过 |
 | 3.5.7 | 安装兼容、隐私前置条件与本地更新降级检查 | macOS 267 项通过；本次未部署 VPS |
 | 3.5.8 | 停止状态、DNS 失败提示、暂存清理、根校验文件、统一重试 | macOS 281 项通过；本次未部署 VPS |
+| 3.5.9 | 截断响应检测与重试、元数据解析错误提示 | macOS 289 项通过；本次未部署 VPS |
+
+## v3.5.9 — 2026-10-20
+
+- 本机自动化 **289/289**、Bash 语法、ShellCheck 与管理脚本摘要校验通过。新增：真实 `http.client` 响应在 Content-Length 未满时提前结束会被识别为不完整读取；元数据和附件截断后重试成功；持续截断 3 次后给出干净错误；格式无效的 JSON 不重试并给出明确提示；两个安装入口同样处理。
+- 该问题在 v3.5.8 发布读回时发现：维护者本机旧版系统 Python（LibreSSL）连接 GitHub API 时偶发中途断开。v3.5.8 遇到时会安全失败（不安装），但不会重试。本次不连接或部署 VPS。
+
+Local regression passed **289/289** tests, including early EOF on a real `http.client` response with a declared Content-Length, retried truncated metadata/assets, a clean error after three truncated attempts, and non-retried malformed JSON in all readers. Found during v3.5.8 readback, where intermittent mid-response disconnects failed safely but were not retried. Not deployed to a VPS.
 
 ## v3.5.8 — 2026-10-20
 

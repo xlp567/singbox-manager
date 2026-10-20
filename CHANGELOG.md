@@ -1,5 +1,13 @@
 # Changelog / 更新记录
 
+## 3.5.9 — 2026-10-20
+
+- 修复连接中途断开时响应被静默截断：声明了 Content-Length 的响应提前结束时，读取函数现在报告不完整读取，交给共享重试（最多 3 次），不再把半截数据当作完整结果。
+- GitHub 元数据 JSON 不完整或格式无效时，管理器自升级和两个安装入口都给出明确提示，不再显示原始解析错误；仍不会安装未验证文件。
+
+- Fix silent truncation when a connection drops mid-response: a short read against a declared Content-Length now raises IncompleteRead, so the shared retry (up to 3 attempts) handles it instead of returning partial data.
+- Incomplete or malformed GitHub metadata JSON now produces a clear error in manager self-update and both bootstrap entry points instead of a raw parser error. Unverified files are still never installed.
+
 ## 3.5.8 — 2026-10-20
 
 - 停止服务时，systemd 保持 failed 但主进程已退出（MainPID=0）也视为已停止，不再误报失败并回滚；仍有主进程则拒绝。

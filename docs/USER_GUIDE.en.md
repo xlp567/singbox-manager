@@ -153,7 +153,7 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-To inspect a published version, check out its tag first, for example `git checkout v3.5.8`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
+To inspect a published version, check out its tag first, for example `git checkout v3.5.9`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
 
 - `singbox-manager.sh`: the combined Bash management layer and bundled Python engine.
 - `singbox-manager.sha256`: the SHA-256 checksum of that script.
@@ -240,3 +240,8 @@ Maintainer releases require `python3 tools/prepare_github.py --require-private -
 - GitHub reads retry network interruptions, timeouts and 408/429/5xx up to 3 attempts. Permission, signature and format errors are not retried, and unverified files are never installed.
 
 See [known issues and limits](KNOWN_ISSUES.md) for outstanding items.
+
+
+## 15. v3.5.9 truncated-response fix
+
+When a GitHub response ends before its declared length, the read is treated as a transient network failure and retried (up to 3 attempts) instead of returning partial data. If metadata is still incomplete or malformed, menu 30 and both bootstrap entry points report an incomplete/invalid response, change no manager script and install nothing.

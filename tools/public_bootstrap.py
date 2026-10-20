@@ -28,7 +28,8 @@ def read(path,token=''):
     except urllib.error.HTTPError as error:raise ValueError('GitHub HTTP '+str(error.code)+'；请确认仓库访问权限，或稍后重试') from None
     except (urllib.error.URLError,OSError,http.client.HTTPException):raise ValueError('无法连接 GitHub（已重试），请稍后重试') from None
     if len(data)>LIMIT:raise ValueError('安装响应过大')
-    value=json.loads(data)
+    try:value=json.loads(data)
+    except ValueError:raise ValueError('GitHub 安装响应不完整或格式无效，请稍后重试') from None
     if not isinstance(value,dict):raise ValueError('安装响应格式异常')
     return value
 

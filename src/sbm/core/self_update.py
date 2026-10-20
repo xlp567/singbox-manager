@@ -179,7 +179,8 @@ def request_json(url,token=''):
     except (urllib.error.URLError,OSError,http.client.HTTPException):
         raise ValueError('无法连接 GitHub（已重试），未修改管理脚本') from None
     if len(data)>LIMIT:raise ValueError('GitHub 响应超过大小限制')
-    return json.loads(data)
+    try:return json.loads(data)
+    except ValueError:raise ValueError('GitHub 响应不完整或格式无效，未修改管理脚本') from None
 
 
 def source(state):
