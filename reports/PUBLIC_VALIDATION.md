@@ -14,6 +14,17 @@
 | 3.5.8 | 停止状态、DNS 失败提示、暂存清理、根校验文件、统一重试 | macOS 281 项通过；本次未部署 VPS |
 | 3.5.9 | 截断响应检测与重试、元数据解析错误提示 | macOS 289 项通过；本次未部署 VPS |
 | 3.6.0 | BBR 原设置恢复、APT 指纹固定、审计分段轮转、多源公网地址 | macOS 311 项通过；本次未部署 VPS |
+| 3.6.1 | 审计轮转互斥、保留边界、BBR 失败恢复记录、仅公网单播 | macOS 338 项通过；本次未连接或部署 VPS |
+
+## v3.6.1 — 2026-10-20
+
+- 本机和完整源码包独立副本的自动化均 **338/338**；Bash 语法、ShellCheck 与管理脚本摘要检查通过。新增 **27 项**回归覆盖实际双进程轮转交错、读取互斥、稳定锁与符号链接拒绝、存在封存历史时当前段缺失、最新 / 中间段缺失、受哈希保护的清理边界、清理中断、旧版尾段告警与迁移、隔离修复证据保留、BBR 恢复失败 / 取消 / 重试 / 读回不符、非公网单播拒绝，以及菜单 29 路径。
+- 使用缩小到 3 条的轮转阈值，控制写入进程在首进程替换日志后尝试写入：必须等待清理与追加完成，再成功追加；7 条操作记录全部保留。双进程轮转与并发读取各额外 **5 轮**通过。正常菜单本已有管理锁；本次修复的是独立审计写入者的轮转边界。
+- BBR 失败保留、成功重试、重复失败保留原记录各额外 **3 轮**通过；全部使用 sysctl 替身，没有切换真实内核参数。
+- 旧版保留 20 段后的尾段缺失无法追溯证明，将明确提示未核实；新轮转记录格式 4 的实际保留边界。旧管理器不理解格式 4，回退不会转换审计记录。缺失记录需相符备份，repair 不能重建；详情见中英文手册第 17 节。
+- 本版的签名及发布验收另见 Release 正文；不连接或部署 VPS，不修改节点、sing-box Runtime、3X-UI 或 Xray。发布与服务器验收另行记录，历史实机结果不能算作本次验收。
+
+Workspace and independently extracted source regression each passed **338/338**, including Bash syntax, ShellCheck and distribution checksums. **27 new cases** cover actual process interleaving, readers sharing the stable lock, missing current (with sealed history)/newest/middle audit segments, hash-bound retention, interrupted cleanup, legacy migration, repair evidence, failed BBR recovery/readback/retries, public-unicast validation and paths. With rotation reduced to 3 entries, a competing writer waits until the first writer finishes replacement/pruning/append, preserving all 7 action records; rotation and reader checks each passed **5 extra rounds**. BBR failed-restore retention, successful retry and repeated failure each passed **3 extra rounds**, using a sysctl double only. Legacy tail gaps remain explicitly unverified; format 4 is not readable by older managers. Missing records require backups; repair cannot recreate them. Signing and publication verification are recorded separately in the Release notes. No VPS was connected or deployed, and no runtime/node/protected-service changes were made.
 
 ## v3.6.0 — 2026-10-20
 

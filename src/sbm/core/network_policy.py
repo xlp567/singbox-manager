@@ -89,7 +89,11 @@ PUBLIC_IP_SOURCES={4:('https://api.ipify.org','https://ipv4.icanhazip.com','http
 CONFIRMED_LIMIT=64
 
 
-def is_public(address):return address.is_global
+def is_public(address):
+    # is_global alone also accepts multicast on supported Python versions.
+    return (address.is_global and not address.is_multicast and not address.is_unspecified
+            and not address.is_loopback and not address.is_link_local and not address.is_reserved
+            and not getattr(address,'is_site_local',False))
 
 
 def detect_public(family,sources=None,runner=subprocess.check_output):
@@ -121,7 +125,7 @@ def confirmed_load(state=None):
 def _global(value):
     try:address=ipaddress.ip_address(str(value).strip())
     except ValueError:raise ValueError('不是有效 IP 地址：'+str(value)) from None
-    if not is_public(address):raise ValueError('只能确认公网地址，拒绝私网 / 回环 / 保留地址：'+str(address))
+    if not is_public(address):raise ValueError('只能确认公网单播地址，拒绝组播 / 私网 / 回环 / 未指定 / 保留地址：'+str(address))
     return address
 
 

@@ -4,11 +4,13 @@
 
 [简体中文](README.md) · English · [English user guide](docs/USER_GUIDE.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md)
 
-![Version](https://img.shields.io/badge/version-3.6.0-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.6.1-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [Official project releases and downloads](https://github.com/xlp567/singbox-manager/releases/latest) include source, the standalone manager, installation entries, SHA-256 manifest and Ed25519 signature.
 
 [Known issues and limits](docs/KNOWN_ISSUES.md)
+
+v3.6.1 fixes audit rotation races, missing-segment misclassification, lost BBR recovery records and multicast acceptance. See [guide section 17](docs/USER_GUIDE.en.md#17-v361-boundary-fixes-and-recovery) for compatibility/recovery and the [public summary](reports/PUBLIC_VALIDATION.md) for local validation and publication status.
 
 ## Quick start
 

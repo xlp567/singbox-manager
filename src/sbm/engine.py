@@ -648,7 +648,11 @@ def main():
     if cmd=='audit-verify':
         report=audit.verify(args[0])
         if '--json' in args: print(json.dumps(report))
-        else: print(f"审计链：通过 | {report['entries']} 条记录 | {report['last_hash']}")
+        else:
+            outcome='现存记录通过，旧版清理边界未核实' if report['legacy_retention_unverified'] else '通过'
+            print(f"审计链：{outcome} | 当前段 {report['entries']} 条记录 | {report['last_hash']}")
+            if report['legacy_retention_unverified']:print('旧版未记录清理边界，缺失尾段原因无法核实')
+            elif report['history_truncated']:print('更早的段已按记录的保留边界清理')
         return
     if cmd in {'compatibility','module-test','compile-checked'}:
         if cmd=='compatibility':

@@ -4,11 +4,13 @@
 
 简体中文 · [English](README.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md) · [English guide](docs/USER_GUIDE.en.md)
 
-![Version](https://img.shields.io/badge/version-3.6.0-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.6.1-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [正式版本与下载附件](https://github.com/xlp567/singbox-manager/releases/latest)：包含完整源码包、独立管理脚本、安装入口、SHA-256 清单及 Ed25519 签名。
 
 [已知问题与使用限制](docs/KNOWN_ISSUES.md)
+
+v3.6.1 修复审计并发轮转、缺段误判、BBR 恢复失败丢失记录及组播地址误收；兼容和恢复方法见[手册第 17 节](docs/USER_GUIDE.zh-CN.md#17-v361-边界修复与故障处理)。本地验证与发布状态见[公开摘要](reports/PUBLIC_VALIDATION.md)。
 
 ## 快速开始
 

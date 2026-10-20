@@ -66,10 +66,12 @@ def main():
         report=audit.verify(args[0])
         if '--json' in args:print(json.dumps(report))
         else:
-            print(f"审计链：通过 | 当前段 {report['entries']} 条记录 | {report['last_hash']}")
+            outcome='现存记录通过，旧版清理边界未核实' if report['legacy_retention_unverified'] else '通过'
+            print(f"审计链：{outcome} | 当前段 {report['entries']} 条记录 | {report['last_hash']}")
             if report['segments'] or report['history_truncated']:
                 print(f"已封存段：{report['segments']} 个，共 {report['sealed_entries']} 条，摘要与链接均通过"+
-                      ("；更早的段已按保留策略清理" if report['history_truncated'] else ''))
+                      ("；旧版未记录清理边界，缺失尾段原因无法核实" if report['legacy_retention_unverified'] else
+                       "；更早的段已按记录的保留边界清理" if report['history_truncated'] else ''))
         return
     if command=='runtime-info':
         info=Runtime(args[0]).info()

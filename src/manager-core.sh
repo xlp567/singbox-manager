@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.6.0 - transactional core and independent protocol adapters
+# singbox-manager v3.6.1 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.6.0
+SBM_VERSION=3.6.1
 SHORTCUT=/usr/local/bin/sbm
 # Used by service.sh bundled below; tests redirect them.
 # shellcheck disable=SC2034

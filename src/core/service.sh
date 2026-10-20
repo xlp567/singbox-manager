@@ -100,16 +100,27 @@ diagnostics() {
 }
 bbr_original_restore() {
     # Restores the runtime values recorded before this manager enabled BBR.
-    local saved=$1 cc qdisc
+    local saved=$1 cc qdisc failed=0
     cc=$(sed -n 's/^tcp_congestion_control=\([a-z0-9_]\{1,32\}\)$/\1/p' "$saved")
     qdisc=$(sed -n 's/^default_qdisc=\([a-z0-9_]\{1,32\}\)$/\1/p' "$saved")
     [[ -n $cc && -n $qdisc ]] || return 1
     grep -qw -- "$cc" "$CC_AVAILABLE" || return 1
-    sysctl -w "net.ipv4.tcp_congestion_control=$cc" >/dev/null || return 1
-    sysctl -w "net.core.default_qdisc=$qdisc" >/dev/null || return 1
+    sysctl -w "net.ipv4.tcp_congestion_control=$cc" >/dev/null || failed=1
+    sysctl -w "net.core.default_qdisc=$qdisc" >/dev/null || failed=1
+    (( failed == 0 )) || return 1
+    [[ $(sysctl -n net.ipv4.tcp_congestion_control) == "$cc" && $(sysctl -n net.core.default_qdisc) == "$qdisc" ]]
 }
 bbr_action() {
     local f=$BBR_CONF saved=$STATE/bbr-original.conf cc qdisc
+    [[ ! -L $saved && ! -L $f ]] || die 'BBR 配置或原设置记录为符号链接，请人工核查。'
+    if [[ ! -f $f && -e $saved ]]; then
+        [[ -f $saved ]] || die "BBR 原设置记录不是普通文件：$saved"
+        confirm '发现上次未完成的 BBR 恢复；先重试恢复记录的两项原设置' || return 0
+        if bbr_original_restore "$saved"; then
+            rm -f "$saved"; say '原拥塞算法与队列设置已恢复并读回确认。'
+        else die "未能完全恢复 BBR 原设置；记录保留在 $saved，可再次用菜单 27 重试，或人工核查。"; fi
+        return 0
+    fi
     cc=$(sysctl -n net.ipv4.tcp_congestion_control)
     if [[ -f $f ]]; then
         say "当前拥塞控制：${cc}（由本脚本开启）。"
@@ -119,12 +130,16 @@ bbr_action() {
             confirm '关闭本脚本开启的 BBR（旧版开启时未记录原设置，将恢复为 cubic 并重新加载系统 sysctl 配置）' || return 0
         fi
         rm -f "$f"
-        sysctl --system >/dev/null 2>&1 || true
         if [[ -f $saved && ! -L $saved ]]; then
             if bbr_original_restore "$saved"; then rm -f "$saved"
-            else say '警告：记录的原设置无效或内核不再支持，已回退为 cubic；请检查 sysctl 配置。' >&2
-                sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null; fi
+            else
+                if sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null; then
+                    say '警告：原设置未完全恢复，已回退为 cubic。' >&2
+                else say '警告：原设置恢复与 cubic 回退均未完成。' >&2; fi
+                die "恢复记录保留在 $saved；菜单 27 将重试恢复，不会覆盖该记录。"
+            fi
         else
+            sysctl --system >/dev/null 2>&1 || true
             sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null
         fi
         say "已关闭：当前 $(sysctl -n net.ipv4.tcp_congestion_control) / $(sysctl -n net.core.default_qdisc)"
@@ -144,8 +159,10 @@ bbr_action() {
     chmod 600 "$saved"
     printf '# Managed by singbox-manager.sh\nnet.core.default_qdisc=fq\nnet.ipv4.tcp_congestion_control=bbr\n' >"$f"
     if ! sysctl -p "$f" >/dev/null; then
-        rm -f "$f"; bbr_original_restore "$saved" || true; rm -f "$saved"
-        die '系统拒绝修改该参数（可能是容器环境），已撤销。'
+        rm -f "$f"
+        if bbr_original_restore "$saved"; then
+            rm -f "$saved"; die '系统拒绝修改该参数（可能是容器环境），已撤销并读回确认原设置。'
+        else die "系统拒绝修改参数，且未能完全恢复原设置。恢复记录保留在 $saved；再次运行菜单 27 可重试。"; fi
     fi
     say "已开启：$(sysctl -n net.ipv4.tcp_congestion_control) / $(sysctl -n net.core.default_qdisc)"
 }

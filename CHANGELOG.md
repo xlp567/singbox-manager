@@ -1,5 +1,17 @@
 # Changelog / 更新记录
 
+## 3.6.1 — 2026-10-20
+
+- 审计使用独立锁串行化追加、轮转、清理与修复，校验取得同一把共享锁，修复替换日志后并发写入误删新段的问题。
+- 轮转首行记录受哈希保护的实际保留边界；保留范围内缺段报错，旧版无法证明的尾段清理明确提示未知。隔离修复同时保存封存段证据。
+- BBR 恢复失败保留原设置并提供菜单 27 重试；只有写入和读回都成功才删除恢复记录，不再错误报告“已撤销”。正常恢复不加载其他 sysctl 配置。
+- 公网检测及管理员确认统一拒绝组播、未指定和其他非公网单播地址。菜单 29 补齐审计锁与恢复记录位置。
+
+- Serialize audit append, rotation, pruning and repair with a stable sidecar lock; readers share it, preventing replacement races from deleting newer segments.
+- Hash-bind the actual retention boundary. Reject missing retained segments and report legacy tail gaps as unverified; preserve sealed evidence during corrupt-current repair.
+- Keep saved BBR settings after incomplete restoration and offer a confirmed retry in menu 27. Require successful writes and readback before removing recovery records; normal recovery avoids unrelated sysctl reloads.
+- Require public unicast for detection and operator confirmation. Menu 29 lists audit locking and recovery records.
+
 ## 3.6.0 — 2026-10-20
 
 - BBR（菜单 27）开启前记录原拥塞算法与队列规则，关闭时恢复这两项；开启被系统拒绝时也恢复。旧版开启、没有记录的主机仍回退为 cubic，并重新加载系统 sysctl 配置。

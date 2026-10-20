@@ -78,7 +78,7 @@ class BbrRestore(ShellCase):
     def test_unsupported_recorded_algorithm_warns_and_uses_cubic(self):
         self.run_bash(SYSCTL_MOCK+'bbr_action')
         (self.p/'state/bbr-original.conf').write_text('tcp_congestion_control=vegas\ndefault_qdisc=pfifo_fast\n')
-        output=self.run_bash(SYSCTL_MOCK+'bbr_action')
+        output=self.run_bash(SYSCTL_MOCK+'bbr_action',1)
         self.assertIn('已回退为 cubic',output);self.assertEqual(self.state()['net.ipv4.tcp_congestion_control'],'cubic')
 
     def test_rejected_enable_restores_partial_change_and_removes_record(self):
