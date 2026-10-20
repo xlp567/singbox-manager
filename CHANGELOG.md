@@ -2,12 +2,15 @@
 
 ## 3.5.7 — 2026-10-20
 
+- 明确隐私检测测试的合成地址命名，避免将临时测试值误识别为真实 secret；不关闭或排除 CodeQL 规则。
+
 - 明确 Debian 11+ / Ubuntu 20.04+、Python 3.8+、OpenSSH 客户端 8.1+ 的最低要求；安装入口提前检查，旧签名工具给出明确诊断。
 - 公开说明改为引用脱敏验证摘要；回归确认管理核心可被 Git 正常跟踪，补充 private/ 排除。
 - 隐私门禁增加缺失 / 空私有清单警告与 --require-private 严格模式，贯通源码清单、打包及历史 / Release 审计。
 - 删除旧下载解码函数、遗留测试和未使用的 getpass；修正公开仓库读取失败提示。
 - SSH 上传更新拒绝降级；确认前检查，写入前核对两个已安装入口。主动回退仍使用明确确认的本机备份流程。
 
+- Clarify synthetic-address fixture naming without disabling or excluding CodeQL rules.
 - Document/enforce Debian 11+ / Ubuntu 20.04+, Python 3.8+ and OpenSSH client 8.1+; distinguish unsupported signature tools from invalid signatures.
 - Point public manuals to sanitized validation; verify Git tracks the core and excludes private/.
 - Warn about missing/empty private identifiers and add --require-private across source preparation, packaging and history/Release auditing.

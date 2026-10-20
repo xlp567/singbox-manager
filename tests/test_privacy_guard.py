@@ -77,11 +77,13 @@ class PrivacyGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root=pathlib.Path(folder);(root/'tools').mkdir()
             for name in ('prepare_github.py','privacy_guard.py'):shutil.copy(ROOT/'tools'/name,root/'tools'/name)
-            secret='.'.join(map(str,[11,22,33,44]));(root/'README.md').write_text('target='+secret)
+            # Synthetic detector input only; no credentials or network access.
+            synthetic_address='.'.join(map(str,[11,22,33,44]))
+            (root/'README.md').write_text('target='+synthetic_address)
             out=root/'manifest.json'
             result=subprocess.run([sys.executable,str(root/'tools/prepare_github.py'),'--output',str(out)],capture_output=True,text=True)
             self.assertNotEqual(result.returncode,0);self.assertFalse(out.exists())
-            self.assertNotIn(secret,result.stdout+result.stderr)
+            self.assertNotIn(synthetic_address,result.stdout+result.stderr)
 
     def test_current_source_passes_and_raw_reports_are_excluded(self):
         with tempfile.TemporaryDirectory() as folder:
