@@ -3,6 +3,7 @@
 import base64
 import fcntl
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -16,6 +17,7 @@ import urllib.request
 import uuid
 """Pinned release signatures and static inspection; never executes a candidate."""
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -23,6 +25,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -32,6 +35,20 @@ PUBLIC_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAW8DuzbY0y6ySdV3EfX0XtEe7NogBEQ
 SIGNER='singbox-manager-release'
 NAMESPACE='singbox-manager-release'
 TRUST_LIMIT=2*1024*1024
+RETRY_STATUS=frozenset({408,429,500,502,503,504})
+RETRY_DELAYS=(0.5,1.5)
+
+
+def retrying(operation,delays=RETRY_DELAYS):
+    """Shared GitHub retry: transient transport / 408 / 429 / 5xx only.
+    Permission, redirect, size, format and signature failures are never retried."""
+    for delay in (*delays,None):
+        try:return operation()
+        except urllib.error.HTTPError as error:
+            if error.code not in RETRY_STATUS or delay is None:raise
+        except (urllib.error.URLError,OSError,http.client.HTTPException):
+            if delay is None:raise
+        time.sleep(delay)
 
 
 def require_python():
@@ -134,12 +151,13 @@ def asset_bytes(url,token=''):
     if api:
         url+='?download=1&sbm='+uuid.uuid4().hex
         if token:headers['Authorization']='Bearer '+token
-    try:
+    def attempt():
         with urllib.request.build_opener(ReleaseAssetRedirect).open(urllib.request.Request(url,headers=headers),timeout=30) as response:
             if 'application/json' in response.headers.get('Content-Type',''):raise ValueError('发布附件返回了元数据，拒绝作为程序使用')
-            data=bounded_read(response)
+            return bounded_read(response)
+    try:data=retrying(attempt)
     except urllib.error.HTTPError as error:raise ValueError('发布附件读取失败（HTTP '+str(error.code)+'）') from None
-    except urllib.error.URLError:raise ValueError('无法下载正式发布附件') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):raise ValueError('无法下载正式发布附件（已重试）') from None
     if len(data)>TRUST_LIMIT:raise ValueError('发布附件超过大小限制')
     return data
 
@@ -199,20 +217,18 @@ def request(path,token):
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-install',
              'X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     if token:headers['Authorization']='Bearer '+token
-    for attempt in range(2):
-        try:
-            with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=20) as response:
-                data=bounded_read(response,LIMIT)
-            if len(data)>LIMIT:raise ValueError('GitHub 安装响应过大')
-            value=json.loads(data)
-            if not isinstance(value,dict):raise ValueError('GitHub 安装响应格式异常')
-            return value
-        except urllib.error.HTTPError as error:
-            if error.code in {500,502,503,504} and not attempt:time.sleep(.25);continue
-            raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；公开仓库请稍后重试，私有仓库请检查 Contents:read 权限') from None
-        except (urllib.error.URLError,TimeoutError):
-            if not attempt:time.sleep(.25);continue
-            raise ValueError('无法连接 GitHub，安装未完成') from None
+    def attempt():
+        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=20) as response:
+            return bounded_read(response,LIMIT)
+    try:data=retrying(attempt)
+    except urllib.error.HTTPError as error:
+        raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；公开仓库请稍后重试，私有仓库请检查 Contents:read 权限') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):
+        raise ValueError('无法连接 GitHub（已重试），安装未完成') from None
+    if len(data)>LIMIT:raise ValueError('GitHub 安装响应过大')
+    value=json.loads(data)
+    if not isinstance(value,dict):raise ValueError('GitHub 安装响应格式异常')
+    return value
 
 
 def atomic(path,data,mode=0o600):

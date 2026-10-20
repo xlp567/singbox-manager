@@ -3,6 +3,7 @@
 import base64
 import fcntl
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -14,7 +15,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from sbm.core.release_trust import download_release,verify_directory,static_script_info,asset_bytes,bounded_read,require_python,require_supported_os
+from sbm.core.release_trust import retrying,download_release,verify_directory,static_script_info,asset_bytes,bounded_read,require_python,require_supported_os
 
 REPOSITORY='xlp567/singbox-manager'
 CHANNEL='stable'
@@ -33,20 +34,18 @@ def request(path,token):
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-install',
              'X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     if token:headers['Authorization']='Bearer '+token
-    for attempt in range(2):
-        try:
-            with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=20) as response:
-                data=bounded_read(response,LIMIT)
-            if len(data)>LIMIT:raise ValueError('GitHub 安装响应过大')
-            value=json.loads(data)
-            if not isinstance(value,dict):raise ValueError('GitHub 安装响应格式异常')
-            return value
-        except urllib.error.HTTPError as error:
-            if error.code in {500,502,503,504} and not attempt:time.sleep(.25);continue
-            raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；公开仓库请稍后重试，私有仓库请检查 Contents:read 权限') from None
-        except (urllib.error.URLError,TimeoutError):
-            if not attempt:time.sleep(.25);continue
-            raise ValueError('无法连接 GitHub，安装未完成') from None
+    def attempt():
+        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=20) as response:
+            return bounded_read(response,LIMIT)
+    try:data=retrying(attempt)
+    except urllib.error.HTTPError as error:
+        raise ValueError('GitHub 安装读取失败（HTTP '+str(error.code)+'）；公开仓库请稍后重试，私有仓库请检查 Contents:read 权限') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):
+        raise ValueError('无法连接 GitHub（已重试），安装未完成') from None
+    if len(data)>LIMIT:raise ValueError('GitHub 安装响应过大')
+    value=json.loads(data)
+    if not isinstance(value,dict):raise ValueError('GitHub 安装响应格式异常')
+    return value
 
 
 def atomic(path,data,mode=0o600):

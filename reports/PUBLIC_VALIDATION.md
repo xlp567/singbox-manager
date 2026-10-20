@@ -11,6 +11,14 @@
 | 3.5.5 | 事务停止服务、发布隐私 | 当时本地 208 项通过，未部署 |
 | 3.5.6 | 四项安全 / 可靠性修复与实际部署 | macOS / Debian 各 246 项通过；下述实际验证通过 |
 | 3.5.7 | 安装兼容、隐私前置条件与本地更新降级检查 | macOS 267 项通过；本次未部署 VPS |
+| 3.5.8 | 停止状态、DNS 失败提示、暂存清理、根校验文件、统一重试 | macOS 281 项通过；本次未部署 VPS |
+
+## v3.5.8 — 2026-10-20
+
+- 本机自动化 **281/281**、Bash 语法、ShellCheck 与管理脚本摘要校验通过。新增：failed 且无主进程的停止接受、仍有主进程拒绝；dig 失败 / 超时提示；.object-* 暂存清理且保留已完成对象；根目录校验文件更新、写入失败回滚、旧格式备份恢复；共享重试的可重试 / 不可重试分类及次数上限。
+- failed 状态停止使用 systemctl 替身验证，尚未在真实 systemd 主机复现；本次不连接或部署 VPS，不修改节点、sing-box Runtime、3X-UI 或 Xray。
+
+Local regression passed **281/281** tests, covering failed-but-exited stops, DNS failure reporting, `.object-*` cleanup, root checksum refresh/rollback and the shared retry classification. The failed-state stop is verified with a systemctl double, not yet on a live systemd host. Not deployed to a VPS.
 
 ## v3.5.7 — 2026-10-20
 

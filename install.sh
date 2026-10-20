@@ -25,6 +25,7 @@ python3 -c 'import sys; sys.version_info >= (3,8) or sys.exit("需要 Python 3.8
 echo '正在验证最新正式 Release 的签名（公开仓库，无需令牌）……'
 python3 - <<'SBM_PUBLIC_BOOTSTRAP'
 """Signed formal-Release bootstrap; execution follows verification and consent."""
+import http.client
 import json
 import pathlib
 import re
@@ -35,6 +36,7 @@ import urllib.request
 import uuid
 """Pinned release signatures and static inspection; never executes a candidate."""
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -42,6 +44,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -51,6 +54,20 @@ PUBLIC_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAW8DuzbY0y6ySdV3EfX0XtEe7NogBEQ
 SIGNER='singbox-manager-release'
 NAMESPACE='singbox-manager-release'
 TRUST_LIMIT=2*1024*1024
+RETRY_STATUS=frozenset({408,429,500,502,503,504})
+RETRY_DELAYS=(0.5,1.5)
+
+
+def retrying(operation,delays=RETRY_DELAYS):
+    """Shared GitHub retry: transient transport / 408 / 429 / 5xx only.
+    Permission, redirect, size, format and signature failures are never retried."""
+    for delay in (*delays,None):
+        try:return operation()
+        except urllib.error.HTTPError as error:
+            if error.code not in RETRY_STATUS or delay is None:raise
+        except (urllib.error.URLError,OSError,http.client.HTTPException):
+            if delay is None:raise
+        time.sleep(delay)
 
 
 def require_python():
@@ -153,12 +170,13 @@ def asset_bytes(url,token=''):
     if api:
         url+='?download=1&sbm='+uuid.uuid4().hex
         if token:headers['Authorization']='Bearer '+token
-    try:
+    def attempt():
         with urllib.request.build_opener(ReleaseAssetRedirect).open(urllib.request.Request(url,headers=headers),timeout=30) as response:
             if 'application/json' in response.headers.get('Content-Type',''):raise ValueError('发布附件返回了元数据，拒绝作为程序使用')
-            data=bounded_read(response)
+            return bounded_read(response)
+    try:data=retrying(attempt)
     except urllib.error.HTTPError as error:raise ValueError('发布附件读取失败（HTTP '+str(error.code)+'）') from None
-    except urllib.error.URLError:raise ValueError('无法下载正式发布附件') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):raise ValueError('无法下载正式发布附件（已重试）') from None
     if len(data)>TRUST_LIMIT:raise ValueError('发布附件超过大小限制')
     return data
 
@@ -213,10 +231,11 @@ def read(path,token=''):
     if not re.fullmatch(r'/releases/latest|/git/ref/tags/v\d+\.\d+\.\d+|/git/tags/[a-f0-9]{40}',path):raise ValueError('安装路径无效')
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-public-install','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     if token:headers['Authorization']='Bearer '+token
-    try:
-        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=25) as response:data=bounded_read(response,LIMIT)
+    def attempt():
+        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=25) as response:return bounded_read(response,LIMIT)
+    try:data=retrying(attempt)
     except urllib.error.HTTPError as error:raise ValueError('GitHub HTTP '+str(error.code)+'；请确认仓库访问权限，或稍后重试') from None
-    except (urllib.error.URLError,TimeoutError):raise ValueError('无法连接 GitHub，请稍后重试') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):raise ValueError('无法连接 GitHub（已重试），请稍后重试') from None
     if len(data)>LIMIT:raise ValueError('安装响应过大')
     value=json.loads(data)
     if not isinstance(value,dict):raise ValueError('安装响应格式异常')

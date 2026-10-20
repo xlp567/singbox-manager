@@ -299,7 +299,9 @@ def verify_dns(m):
         except ValueError:
             addresses=set()
             for typ in ['A','AAAA']:
-                s=subprocess.check_output(['dig','+time=3','+tries=1','+short',typ,name],text=True)
+                try: s=subprocess.check_output(['dig','+time=3','+tries=1','+short',typ,name],text=True,stderr=subprocess.DEVNULL,timeout=15)
+                except (subprocess.CalledProcessError,subprocess.TimeoutExpired,OSError):
+                    fail('无法查询节点域名 '+name+' 的 '+typ+' 记录（dig 超时或失败）；请检查本机 DNS 后重试，现有服务未改动')
                 for line in s.splitlines():
                     try: addresses.add(ipaddress.ip_address(line.strip()))
                     except ValueError: pass

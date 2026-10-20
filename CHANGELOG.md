@@ -1,5 +1,19 @@
 # Changelog / 更新记录
 
+## 3.5.8 — 2026-10-20
+
+- 停止服务时，systemd 保持 failed 但主进程已退出（MainPID=0）也视为已停止，不再误报失败并回滚；仍有主进程则拒绝。
+- 节点域名 DNS 查询失败或超时（15 秒上限）时给出包含域名和记录类型的明确提示，不再显示原始命令错误；现有服务不改动。
+- 运行对象垃圾回收在管理锁下清理强制中断遗留的 .object-* 暂存目录，不影响已完成对象及其他名称。
+- 管理器自升级同步更新根目录 singbox-manager.sha256，并纳入备份与失败回滚；内容相同时仅修复过期校验文件。v3.5.8 之前的备份仍可恢复。
+- GitHub 元数据、附件读取和两个安装入口统一自动重试：只对网络中断、超时、408 / 429 / 5xx 最多尝试 3 次；权限、跳转、大小、格式和签名失败立即停止，仍不会安装未验证文件。
+
+- Treat a failed unit with MainPID=0 as stopped after `systemctl stop`; a lingering main process is still rejected.
+- Report DNS lookup failures/timeouts (15 s bound) with the node name and record type instead of a raw command error.
+- Runtime-object GC removes `.object-*` staging directories left by hard interruption, under the manager lock.
+- Manager self-update refreshes the root `singbox-manager.sha256`, backing it up and rolling it back with the scripts; pre-3.5.8 backups still restore.
+- Share one bounded retry (3 attempts, transport / 408 / 429 / 5xx only) across GitHub metadata, assets and both bootstrap entry points; permission, redirect, size, format and signature failures fail immediately.
+
 ## 3.5.7 — 2026-10-20
 
 - 明确隐私检测测试的合成地址命名，避免将临时测试值误识别为真实 secret；不关闭或排除 CodeQL 规则。

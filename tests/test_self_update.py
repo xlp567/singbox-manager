@@ -83,6 +83,37 @@ manager_update_action github
         self.assertTrue(all('-n' in c.args[0] for c in calls.call_args_list if c.args[0][0]=='bash'))
         self.assertFalse((self.state/'manager-update-pending.json').exists())
 
+    def test_install_refreshes_root_checksum_and_failure_restores_it(self):
+        side=self.root/'singbox-manager.sha256';old=(file_digest(self.root/'singbox-manager.sh')+'  singbox-manager.sh\n').encode()
+        side.write_bytes(old);report=self.install()
+        self.assertEqual(side.read_text(),file_digest(self.candidate)+'  singbox-manager.sh\n')
+        self.assertEqual((pathlib.Path(report['backup'])/'sidecar.sha256').read_bytes(),old)
+        u.restore(self.state,report['backup'],self.root,self.shortcut)
+        self.assertEqual(side.read_bytes(),old);self.assertEqual(self.shortcut.read_bytes(),self.old)
+
+    def test_sidecar_write_failure_rolls_back_scripts_and_checksum(self):
+        side=self.root/'singbox-manager.sha256';side.write_text('stale  singbox-manager.sh\n');atomic=u.atomic_bytes
+        def copy(path,data,mode=0o700):
+            if pathlib.Path(path)==side and data!=b'stale  singbox-manager.sh\n':raise OSError('injected sidecar failure')
+            return atomic(path,data,mode)
+        with patch.object(u,'atomic_bytes',side_effect=copy),self.assertRaises(OSError):self.install()
+        self.assertEqual(side.read_text(),'stale  singbox-manager.sh\n');self.assertEqual(self.shortcut.read_bytes(),self.old)
+        self.assertFalse((self.state/'manager-update-pending.json').exists())
+
+    def test_identical_install_repairs_stale_root_checksum(self):
+        self.install();side=self.root/'singbox-manager.sha256';side.write_text('stale\n')
+        count=len(list((self.state/'manager-backups').iterdir()))
+        self.assertFalse(self.install()['changed'])
+        self.assertEqual(side.read_text(),file_digest(self.candidate)+'  singbox-manager.sh\n')
+        self.assertEqual(count,len(list((self.state/'manager-backups').iterdir())))
+
+    def test_pre_358_backup_without_sidecar_entry_still_restores(self):
+        report=self.install();manifest=pathlib.Path(report['backup'])/'manifest.json'
+        data=json.loads(manifest.read_text());data.pop('sidecar');save(manifest,data)
+        side=self.root/'singbox-manager.sha256';current=side.read_bytes()
+        u.restore(self.state,report['backup'],self.root,self.shortcut)
+        self.assertEqual(self.shortcut.read_bytes(),self.old);self.assertEqual(side.read_bytes(),current)
+
     def test_identical_install_does_not_produce_more_backups(self):
         self.install();count=len(list((self.state/'manager-backups').iterdir()))
         self.assertFalse(self.install()['changed'])

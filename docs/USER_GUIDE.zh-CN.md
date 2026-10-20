@@ -153,7 +153,7 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.7`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
+若要检查某个已发布版本，先切换对应标签，例如 `git checkout v3.5.8`，再构建；默认分支可能含有发布后的改动。构建需要 Python 3 标准库，不需要 root，也不会安装或重启服务。生成文件是：
 
 - `singbox-manager.sh`：合并 Bash 管理层与 Python 引擎的独立管理脚本。
 - `singbox-manager.sha256`：上述脚本的 SHA-256 摘要。
@@ -229,3 +229,14 @@ SHA256:iBBDFzAHqEHERHmSi/RbV9IEW8xBeuWcIV3ZkGMotE4
 菜单 30 → 1 的 SSH 上传和 GitHub 更新均拒绝较旧版本；检查发生在确认前，安装写入前还会静态核对两个已安装入口。相同版本可重新安装或直接判定无变化。需要主动回退时，只通过菜单 30 → 3 选择已有本机备份并明确确认，旧版可能丢失安全修复。
 
 维护者发布须执行 `python3 tools/prepare_github.py --require-private --output .cache/publish.json`、`python3 tools/privacy_guard.py --require-private .cache/publish.json` 和 `python3 tools/package.py --require-private`。私有精确匹配清单缺失、为空或无效即失败；普通第三方源码副本会警告未启用私有匹配，但仍可构建、运行通用扫描。清单永不加入 GitHub 或源码包。公开测试记录统一见 [PUBLIC_VALIDATION.md](../reports/PUBLIC_VALIDATION.md)。
+
+
+## 14. v3.5.8 可靠性修复
+
+- 菜单 16 停止服务时，systemd 可能保持 `failed`（例如进程此前崩溃）。只要主进程已退出（MainPID=0），即视为已停止；仍有主进程则判定失败并回滚。
+- 节点域名 DNS 查询失败或超过 15 秒时，提示具体域名和 A / AAAA 记录类型，配置不提交，现有服务不变。
+- 强制中断（断电 / SIGKILL）遗留的 `.object-*` 暂存目录会在下次提交后的自动清理或菜单 24 中删除。
+- 菜单 30 更新管理器时同时更新 `/root/singbox-manager.sha256`，与两个脚本入口一起备份、失败时回滚。
+- GitHub 读取遇到网络中断、超时、408 / 429 / 5xx 时自动重试，最多 3 次；权限、签名或格式错误不重试，也不会安装未验证文件。
+
+仍未修复的事项见[已知问题与限制](KNOWN_ISSUES.md)。

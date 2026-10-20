@@ -8,7 +8,7 @@ if cmd=='is-active': sys.exit(0 if m['active'] else 3)
 if cmd=='is-enabled': sys.exit(0 if m['enabled'] else 1)
 if cmd=='show':
     if (p.parent/'fail-show').exists(): sys.exit(1)
-    if 'ActiveState' in sys.argv: print('active' if m['active'] else 'inactive')
+    if 'ActiveState' in sys.argv: print('active' if m['active'] else 'failed' if (p.parent/'failed-state').exists() else 'inactive')
     else: print('12345' if m['active'] or (p.parent/'lingering-pid').exists() else '0')
     sys.exit(0)
 if cmd=='daemon-reload': sys.exit(0)

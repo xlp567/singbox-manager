@@ -142,6 +142,12 @@ class RuntimeObjects(unittest.TestCase):
         backup=self.snapshot('one');self.assertEqual(storage.runtime_gc(self.pool),0)
         shutil.rmtree(backup);self.assertEqual(storage.runtime_gc(self.pool),1)
 
+    def test_gc_removes_interrupted_object_staging_directories(self):
+        backup=self.snapshot('one');staging=self.pool/'.object-abc_123';(staging/'runtime-libs').mkdir(parents=True)
+        (staging/'runtime.bin').write_bytes(b'partial');other=self.pool/'.unrelated';other.mkdir()
+        self.assertEqual(storage.runtime_gc(self.pool),1)
+        self.assertFalse(staging.exists());self.assertTrue(other.exists());storage.backup_verify(backup)
+
     def test_low_space_guard_uses_incremental_size_not_fixed_512_mib(self):
         self.snapshot('one');conf=self.root/'conf';conf.mkdir();exports=self.root/'exports';exports.mkdir()
         usage=shutil._ntuple_diskusage(1024**3,1000,16*1024**2)

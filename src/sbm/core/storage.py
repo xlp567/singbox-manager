@@ -43,7 +43,10 @@ def runtime_gc(pool):
     if pool.is_symlink():fail('运行文件对象目录不得为符号链接')
     if not pool.exists():return 0
     for directory in pool.iterdir():
-        if directory.is_symlink() or not directory.is_dir() or not re.fullmatch(r'[a-f0-9]{64}',directory.name):continue
+        if directory.is_symlink() or not directory.is_dir():continue
+        # Callers hold the manager lock, so a staging directory is left over from a hard interruption.
+        if re.fullmatch(r'\.object-[A-Za-z0-9_]+',directory.name):shutil.rmtree(directory);removed+=1;continue
+        if not re.fullmatch(r'[a-f0-9]{64}',directory.name):continue
         files=[p for p in directory.rglob('*') if p.is_file() and not p.is_symlink()]
         if files and all(p.stat().st_nlink==1 for p in files):shutil.rmtree(directory);removed+=1
     sync_directory(pool);return removed

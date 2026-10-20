@@ -1,5 +1,6 @@
 """Pinned release signatures and static inspection; never executes a candidate."""
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -7,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,6 +18,20 @@ PUBLIC_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAW8DuzbY0y6ySdV3EfX0XtEe7NogBEQ
 SIGNER='singbox-manager-release'
 NAMESPACE='singbox-manager-release'
 TRUST_LIMIT=2*1024*1024
+RETRY_STATUS=frozenset({408,429,500,502,503,504})
+RETRY_DELAYS=(0.5,1.5)
+
+
+def retrying(operation,delays=RETRY_DELAYS):
+    """Shared GitHub retry: transient transport / 408 / 429 / 5xx only.
+    Permission, redirect, size, format and signature failures are never retried."""
+    for delay in (*delays,None):
+        try:return operation()
+        except urllib.error.HTTPError as error:
+            if error.code not in RETRY_STATUS or delay is None:raise
+        except (urllib.error.URLError,OSError,http.client.HTTPException):
+            if delay is None:raise
+        time.sleep(delay)
 
 
 def require_python():
@@ -118,12 +134,13 @@ def asset_bytes(url,token=''):
     if api:
         url+='?download=1&sbm='+uuid.uuid4().hex
         if token:headers['Authorization']='Bearer '+token
-    try:
+    def attempt():
         with urllib.request.build_opener(ReleaseAssetRedirect).open(urllib.request.Request(url,headers=headers),timeout=30) as response:
             if 'application/json' in response.headers.get('Content-Type',''):raise ValueError('发布附件返回了元数据，拒绝作为程序使用')
-            data=bounded_read(response)
+            return bounded_read(response)
+    try:data=retrying(attempt)
     except urllib.error.HTTPError as error:raise ValueError('发布附件读取失败（HTTP '+str(error.code)+'）') from None
-    except urllib.error.URLError:raise ValueError('无法下载正式发布附件') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):raise ValueError('无法下载正式发布附件（已重试）') from None
     if len(data)>TRUST_LIMIT:raise ValueError('发布附件超过大小限制')
     return data
 

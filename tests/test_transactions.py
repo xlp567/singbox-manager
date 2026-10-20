@@ -132,6 +132,15 @@ apply_draft "$TEST_ROOT/candidate"''',1)
         self.assertIn('transaction-begin',events)
         self.assertIn('transaction-commit',events)
 
+    def test_manual_stop_accepts_failed_unit_without_main_pid(self):
+        self.run_bash('sleep() { :; }\ntouch "$TEST_ROOT/failed-state"\nservice_action stop')
+        self.assertEqual(json.loads((self.p/'service.json').read_text()),{'active':False,'enabled':True})
+        self.assertFalse((self.p/'state/pending').exists())
+
+    def test_manual_stop_rejects_failed_unit_with_lingering_pid(self):
+        self.run_bash('sleep() { :; }\ntouch "$TEST_ROOT/failed-state" "$TEST_ROOT/lingering-pid"\nservice_action stop',1)
+        self.assertRestored();self.assertFalse((self.p/'state/pending').exists())
+
     def test_manual_stop_failure_restores_original_running_state(self):
         self.run_bash('touch "$TEST_ROOT/fail-stop"\nservice_action stop',1)
         self.assertRestored();self.assertFalse((self.p/'state/pending').exists())

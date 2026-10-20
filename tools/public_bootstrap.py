@@ -1,4 +1,5 @@
 """Signed formal-Release bootstrap; execution follows verification and consent."""
+import http.client
 import json
 import pathlib
 import re
@@ -7,7 +8,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import uuid
-from sbm.core.release_trust import download_release,asset_bytes,bounded_read,require_python
+from sbm.core.release_trust import retrying,download_release,asset_bytes,bounded_read,require_python
 
 API='https://api.github.com/repos/xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -21,10 +22,11 @@ def read(path,token=''):
     if not re.fullmatch(r'/releases/latest|/git/ref/tags/v\d+\.\d+\.\d+|/git/tags/[a-f0-9]{40}',path):raise ValueError('安装路径无效')
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager-public-install','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     if token:headers['Authorization']='Bearer '+token
-    try:
-        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=25) as response:data=bounded_read(response,LIMIT)
+    def attempt():
+        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(API+path+'?sbm='+uuid.uuid4().hex,headers=headers),timeout=25) as response:return bounded_read(response,LIMIT)
+    try:data=retrying(attempt)
     except urllib.error.HTTPError as error:raise ValueError('GitHub HTTP '+str(error.code)+'；请确认仓库访问权限，或稍后重试') from None
-    except (urllib.error.URLError,TimeoutError):raise ValueError('无法连接 GitHub，请稍后重试') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):raise ValueError('无法连接 GitHub（已重试），请稍后重试') from None
     if len(data)>LIMIT:raise ValueError('安装响应过大')
     value=json.loads(data)
     if not isinstance(value,dict):raise ValueError('安装响应格式异常')

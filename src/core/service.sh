@@ -56,7 +56,8 @@ service_stopped() {
         sleep 2
         observed_state=$(systemctl show sing-box -p ActiveState --value) || return 1
         pid=$(systemctl show sing-box -p MainPID --value) || return 1
-        [[ $observed_state == inactive && $pid == 0 ]] || return 1
+        # systemctl stop keeps a crashed unit in failed; with no main PID it is stopped.
+        [[ ($observed_state == inactive || $observed_state == failed) && $pid == 0 ]] || return 1
     done
 }
 service_action() {

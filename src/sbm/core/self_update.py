@@ -2,6 +2,7 @@
 import base64
 import getpass
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -13,7 +14,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from .storage import save,sync_directory,file_digest
-from .release_trust import static_script_info,download_release,verify_directory,asset_bytes,bounded_read,version_tuple
+from .release_trust import retrying,static_script_info,download_release,verify_directory,asset_bytes,bounded_read,version_tuple
 
 DEFAULT_REPOSITORY='xlp567/singbox-manager'
 LIMIT=2*1024*1024
@@ -54,6 +55,12 @@ def atomic_bytes(path,data,mode=0o700):
 def targets(root,shortcut):return [str(pathlib.Path(root)/'singbox-manager.sh'),str(pathlib.Path(shortcut))]
 
 
+def sidecar(root):return pathlib.Path(root)/'singbox-manager.sha256'
+
+
+def sidecar_bytes(digest):return (digest+'  singbox-manager.sh\n').encode()
+
+
 def check_version(candidate,current):
     if version_tuple(candidate)<version_tuple(current):
         raise ValueError('候选管理器比当前版本更旧，拒绝降级；需要回退时请使用菜单 30 → 3 的本机备份')
@@ -75,10 +82,20 @@ def restore(state,backup,root,shortcut):
     for row in rows:
         if row.get('file') not in {'0.sh','1.sh'}:raise ValueError('脚本备份文件名无效')
         if row['exists'] and file_digest(regular(p/row['file']))!=row['sha256']:raise ValueError('旧脚本备份摘要不符，保留恢复标记')
+    side=m.get('sidecar')
+    if side is not None:
+        if not isinstance(side,dict) or side.get('file')!='sidecar.sha256':raise ValueError('校验文件备份清单损坏')
+        if side['exists'] and file_digest(regular(p/side['file']))!=side['sha256']:raise ValueError('旧校验文件备份摘要不符，保留恢复标记')
     for target,row in zip(m['targets'],rows):
         if row['exists']:atomic_bytes(target,(p/row['file']).read_bytes())
         elif pathlib.Path(target).is_symlink():raise ValueError('恢复目标为符号链接')
         else:pathlib.Path(target).unlink(missing_ok=True);sync_directory(pathlib.Path(target).parent)
+    # Backups made before v3.5.8 have no sidecar entry; leave the current file untouched.
+    if side is not None:
+        target=sidecar(root)
+        if side['exists']:atomic_bytes(target,(p/side['file']).read_bytes(),0o600)
+        elif target.is_symlink():raise ValueError('恢复目标为符号链接')
+        else:target.unlink(missing_ok=True);sync_directory(target.parent)
 
 
 def recover(state,root,shortcut):
@@ -96,11 +113,15 @@ def install(script,checksum,state,root,shortcut,trusted_rollback=False):
     if not trusted_rollback:verify_directory(pathlib.Path(script).parent)
     info=verify(script,checksum);data=regular(script).read_bytes();dest=targets(root,shortcut)
     if hashlib.sha256(data).hexdigest()!=info['sha256']:raise ValueError('检查期间候选脚本变化，拒绝安装')
+    side=sidecar(root);expected=sidecar_bytes(info['sha256'])
+    if side.is_symlink():raise ValueError('升级目标不得为符号链接')
     for p in dest:
         if pathlib.Path(p).is_symlink():raise ValueError('升级目标不得为符号链接')
         if not trusted_rollback and pathlib.Path(p).exists():
             check_version(info['version'],static_script_info(regular(p).read_bytes())['version'])
     if all(pathlib.Path(p).is_file() and file_digest(p)==info['sha256'] for p in dest):
+        # The root sidecar is metadata only; refresh a stale copy without a script backup.
+        if not side.is_file() or regular(side).read_bytes()!=expected:atomic_bytes(side,expected,0o600)
         return dict(info,changed=False)
     pending=pathlib.Path(state)/'manager-update-pending.json'
     if pending.exists():raise ValueError('存在未完成的脚本升级，请先恢复')
@@ -112,7 +133,10 @@ def install(script,checksum,state,root,shortcut,trusted_rollback=False):
         if row['exists']:
             regular(p);atomic_bytes(backup/row['file'],p.read_bytes());row['sha256']=file_digest(backup/row['file'])
         rows.append(row)
-    save(backup/'manifest.json',{'targets':dest,'files':rows,'installed_version':info['version']})
+    side_row={'file':'sidecar.sha256','exists':side.exists()}
+    if side_row['exists']:
+        atomic_bytes(backup/side_row['file'],regular(side).read_bytes(),0o600);side_row['sha256']=file_digest(backup/side_row['file'])
+    save(backup/'manifest.json',{'targets':dest,'files':rows,'sidecar':side_row,'installed_version':info['version']})
     save(pending,{'backup':str(backup)})
     try:
         # Install the command entry first so a subsequent invocation can recover.
@@ -120,6 +144,8 @@ def install(script,checksum,state,root,shortcut,trusted_rollback=False):
         for p in dest:
             if file_digest(p)!=info['sha256']:raise ValueError('安装后脚本摘要不符')
             verify(p,checksum)
+        atomic_bytes(side,expected,0o600)
+        if regular(side).read_bytes()!=expected:raise ValueError('安装后校验文件不符')
         pending.unlink();sync_directory(state)
     except BaseException:
         restore(state,backup,root,shortcut)
@@ -144,13 +170,14 @@ def request_json(url,token=''):
     headers={'Accept':'application/vnd.github+json','User-Agent':'singbox-manager','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
     url+=('&' if '?' in url else '?')+'sbm='+uuid.uuid4().hex
     if token:headers['Authorization']='Bearer '+token
-    try:
+    def attempt():
         with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(url,headers=headers),timeout=30) as r:
-            data=bounded_read(r,LIMIT)
+            return bounded_read(r,LIMIT)
+    try:data=retrying(attempt)
     except urllib.error.HTTPError as ex:
         raise GitHubReadError(ex.code) from None
-    except urllib.error.URLError:
-        raise ValueError('无法连接 GitHub，未修改管理脚本') from None
+    except (urllib.error.URLError,OSError,http.client.HTTPException):
+        raise ValueError('无法连接 GitHub（已重试），未修改管理脚本') from None
     if len(data)>LIMIT:raise ValueError('GitHub 响应超过大小限制')
     return json.loads(data)
 

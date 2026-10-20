@@ -153,7 +153,7 @@ cd singbox-manager
 python3 tools/build.py
 ```
 
-To inspect a published version, check out its tag first, for example `git checkout v3.5.7`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
+To inspect a published version, check out its tag first, for example `git checkout v3.5.8`, then build. The default branch may contain changes made after a release. Building uses the Python 3 standard library, requires no root access, and does not install or restart services. Outputs are:
 
 - `singbox-manager.sh`: the combined Bash management layer and bundled Python engine.
 - `singbox-manager.sha256`: the SHA-256 checksum of that script.
@@ -229,3 +229,14 @@ Minimum supported systems are Debian 11+ / Ubuntu 20.04+, with Python 3.8+, Open
 Both menu 30 → 1 SSH uploads and GitHub updates reject older versions before consent. The install function also checks both existing script entry points statically before writing. Equal versions remain allowed and may be a no-op. Intentional rollback uses menu 30 → 3 with a local backup and explicit confirmation; older backups may lose security fixes.
 
 Maintainer releases require `python3 tools/prepare_github.py --require-private --output .cache/publish.json`, `python3 tools/privacy_guard.py --require-private .cache/publish.json` and `python3 tools/package.py --require-private`. A missing, empty or invalid private exact-match list fails these checks. Third-party source copies can still build and run generic checks, with a warning that private matching is unavailable. Never publish the private list. Public test evidence is summarized in [PUBLIC_VALIDATION.md](../reports/PUBLIC_VALIDATION.md).
+
+
+## 14. v3.5.8 reliability fixes
+
+- Menu 16 stop: systemd may keep a unit in `failed` (for example after an earlier crash). Once the main process has exited (MainPID=0) the service counts as stopped; a remaining main process still fails and rolls back.
+- DNS lookups for node names that fail or exceed 15 seconds now report the name and A/AAAA record type. Nothing is committed and the running service is unchanged.
+- `.object-*` staging directories left by a hard interruption (power loss / SIGKILL) are removed by the next post-commit cleanup or menu 24.
+- Menu 30 manager updates also refresh `/root/singbox-manager.sha256`, backing it up and rolling it back with both script entry points.
+- GitHub reads retry network interruptions, timeouts and 408/429/5xx up to 3 attempts. Permission, signature and format errors are not retried, and unverified files are never installed.
+
+See [known issues and limits](KNOWN_ISSUES.md) for outstanding items.
