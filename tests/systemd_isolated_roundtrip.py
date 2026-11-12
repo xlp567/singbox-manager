@@ -112,7 +112,7 @@ def main():
             for _ in range(3):run('cycle');live()
             original_nodes=engine.load(conf/'manager.json')['nodes'];run('migrate');live()
             assert engine.load(conf/'manager.json')['nodes']==original_nodes
-            assert engine.load(conf/'manager.json')['security']['policy']=='public-only-v1'
+            assert engine.load(conf/'manager.json')['security']['policy']=='public-only-v2'
             digest=config_hash();run('fault',1);live();assert config_hash()==digest
             run('crash',-9);assert (state/'pending').exists()
             run('recover');live();assert config_hash()==digest and not (state/'pending').exists()

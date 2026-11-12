@@ -158,9 +158,27 @@ def main():
                         except socket.timeout:pass
                     passed=(response.endswith(b'sbm-egress-public-pass') and hits['udp']==before+1) if label=='public-pass' else (not response and hits['udp']==before)
                     results.append({'case':label,'network':'udp','expected':'allowed' if label=='public-pass' else 'blocked','passed':passed})
+                # sing-box routes a UDP session by its first packet. After an admitted
+                # public first packet, later packets of the same association must not
+                # reach another destination. The listener below is never a first target.
+                with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as lan:
+                    lan.bind(('127.0.0.1',0));lan.settimeout(.4);lan_port=lan.getsockname()[1]
+                    for label,host in [cases[0],cases[2],cases[12],cases[13]]:
+                        before=hits['udp'];first=b'';later=b''
+                        with authenticated(port) as control,socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as client:
+                            control.sendall(b'\x05\x03\x00\x01'+socket.inet_aton('127.0.0.1')+b'\x00\x00')
+                            _,relay=reply(control);client.settimeout(.4)
+                            client.sendto(b'\x00\x00\x00'+encoded('public.example')+struct.pack('!H',53)+b'sbm-egress-public-pass',('127.0.0.1',relay))
+                            try:first=client.recvfrom(2048)[0]
+                            except socket.timeout:pass
+                            client.sendto(b'\x00\x00\x00'+encoded(host)+struct.pack('!H',lan_port)+b'sbm-egress-session-later',('127.0.0.1',relay))
+                            try:later=lan.recvfrom(2048)[0]
+                            except socket.timeout:pass
+                        passed=first.endswith(b'sbm-egress-public-pass') and hits['udp']>before and not later
+                        results.append({'case':'session-later-'+label,'network':'udp','expected':'blocked','passed':passed})
             version=subprocess.check_output([binary,'version'],text=True).splitlines()[0].split()[-1]
             report={'runtime':version,'passed':all(r['passed'] for r in results),'cases':results,
-                'scope':'real local authenticated SOCKS TCP/UDP through generated policy; test-only public-target redirect after deny rules; no VPS or external connection'}
+                'scope':'real local authenticated SOCKS TCP/UDP through generated policy, including later packets of an admitted UDP session; test-only public-target redirect after deny rules; no VPS or external connection'}
             pathlib.Path(args.report).write_text(json.dumps(report,indent=2)+'\n')
             print(json.dumps({'passed':report['passed'],'cases':len(results),'failed':[r for r in results if not r['passed']]}))
             return 0 if report['passed'] else 1

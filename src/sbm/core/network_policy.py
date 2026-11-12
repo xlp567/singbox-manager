@@ -6,7 +6,12 @@ import pathlib
 import re
 import subprocess
 
-POLICY='public-only-v1'
+POLICY='public-only-v2'
+# sing-box routes a UDP session by its first packet only. v1 left the direct
+# socket unconnected, so later packets of an admitted session could address
+# loopback or private destinations. v2 connects each session to the checked
+# destination. A v1 configuration stays recognized until the next confirmed apply.
+_PREVIOUS_POLICY='public-only-v1'
 # Explicit coverage complements the runtime's ip_is_private implementation.
 NON_PUBLIC=(
     '0.0.0.0/8','10.0.0.0/8','100.64.0.0/10','127.0.0.0/8',
@@ -47,7 +52,7 @@ def validate(model):
     state=model.get('security')
     if state is None:return
     if (not isinstance(state,dict) or set(state) not in
-            ({'policy','local_addresses'},{'policy','local_addresses','management'}) or state['policy']!=POLICY):
+            ({'policy','local_addresses'},{'policy','local_addresses','management'}) or state['policy'] not in (POLICY,_PREVIOUS_POLICY)):
         raise ValueError('出口安全策略无效，不能关闭默认保护')
     addresses=state['local_addresses']
     if not isinstance(addresses,list) or len(addresses)>512:raise ValueError('本机地址快照无效')
@@ -162,7 +167,7 @@ def _management_rules(model):
     return rules
 
 
-def route(model):
+def route(model,udp_connect=True):
     validate(model)
     own=set(model.get('security',{}).get('local_addresses',[]));domains=set()
     for node in model['nodes']:
@@ -177,14 +182,24 @@ def route(model):
     if domains:names['domain']=sorted(domains)
     # Resolve once inside the router; both literal and resolved destinations are
     # checked before direct dialing, which reuses the resolved address list.
+    allowed={'ip_cidr':['0.0.0.0/0','::/0'],'action':'route','outbound':'direct'}
+    # Management rules are TCP-only, so this is the only rule that admits UDP.
+    # One session reaches one checked destination; full-cone UDP is not offered.
+    if udp_connect:allowed['udp_connect']=True
     return {'rules':[*_management_rules(model),dict(blocked),names,{'action':'resolve','server':'system','disable_optimistic_cache':True},dict(blocked),
-                     {'ip_cidr':['0.0.0.0/0','::/0'],'action':'route','outbound':'direct'},
-                     {'action':'reject'}],'final':'direct'}
+                     allowed,{'action':'reject'}],'final':'direct'}
+
+
+def _previous(model,config,compiled):
+    # Exactly the v1 template of this model: same rules without the UDP binding.
+    if model.get('security',{}).get('policy')!=_PREVIOUS_POLICY:return False
+    previous=dict(compiled);previous['route']=route(model,udp_connect=False)
+    return previous==config
 
 
 def matches(model,config,compiled):
     if compiled==config:return True
-    if 'security' in model:return False
+    if 'security' in model:return _previous(model,config,compiled)
     # Only the exact historical unrestricted template is recognized, never
     # arbitrary user rules or a partially removed new policy.
     legacy=dict(compiled);legacy.pop('dns',None);legacy['route']={'final':'direct'}
@@ -193,9 +208,12 @@ def matches(model,config,compiled):
 
 def status(model,config,compiled):
     current=compiled==config and model.get('security',{}).get('policy')==POLICY
-    return {'policy':POLICY,'applied':current,'legacy_recognized':not current and matches(model,config,compiled),
+    # The running v1 rules still reject first-packet and TCP destinations, and
+    # its management exceptions are live, but later UDP packets are unchecked.
+    outdated=not current and _previous(model,config,compiled)
+    return {'policy':POLICY,'applied':current,'outdated':outdated,'legacy_recognized':not current and matches(model,config,compiled),
             'local_address_count':len(model.get('security',{}).get('local_addresses',[])),
-            'management':model.get('security',{}).get('management',{}) if current else {},
+            'management':model.get('security',{}).get('management',{}) if current or outdated else {},
             'requires_apply':not current,'scope':'proxy egress only; does not change SSH, firewall, 3X-UI or Xray'}
 
 

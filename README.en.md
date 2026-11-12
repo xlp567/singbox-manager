@@ -4,7 +4,7 @@
 
 [简体中文](README.md) · English · [English user guide](docs/USER_GUIDE.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md)
 
-![Version](https://img.shields.io/badge/version-3.6.2-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.6.3-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [Official project releases and downloads](https://github.com/xlp567/singbox-manager/releases/latest) include source, the standalone manager, installation entries, SHA-256 manifest and Ed25519 signature.
 
@@ -99,6 +99,8 @@ Publish source, version, documentation and test evidence together; read back the
 New configurations block proxy access to loopback, private/link-local/metadata destinations and the host's interface addresses, including DNS-resolved destinations. After updating an existing manager, separately choose **31 → 1** or run `sbm security apply`. It backs up, asks for confirmation and briefly restarts sing-box. Updating the manager alone preserves existing routes.
 
 v3.6.2 adds separate, off-by-default local SSH and 3X-UI panel exceptions in **31 → 2 / 3**. Each permits one local public IP and one verified TCP port. The panel can also retain its existing HTTPS hostname. See the [guide](docs/USER_GUIDE.en.md#local-ssh-and-3x-ui-management-exceptions).
+
+v3.6.3 closes a UDP gap in the egress policy: earlier rules checked only the first packet of a UDP session, so later packets could reach UDP ports on the host or private networks. After updating the manager on a protected host, run **31 → 1** or `sbm security apply` once more. One UDP session then reaches one destination; see the [guide](docs/USER_GUIDE.en.md#udp-session-binding-v363).
 
 Corrupt audit records warn without blocking operations; `sbm audit repair` preserves the original and links a new chain. Runtime backups are deduplicated; successful transactions retain the latest 10 automatic snapshots, while manual and legacy backups remain. Installation and updates use the latest formal Release, a pinned Ed25519 public key and static checks before consent. See [guide section 12](docs/USER_GUIDE.en.md#12-v356-security-and-reliability) for signature and first-install trust boundaries.
 

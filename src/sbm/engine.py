@@ -741,7 +741,8 @@ def main():
         report=network_policy.status(m,load(args[1]),compile_config(m))
         if '--json' in args[2:]:print(json.dumps(report))
         else:
-            print('出口安全：'+('已应用' if report['applied'] else '尚未应用；请使用菜单 31 或 sbm security apply'))
+            if report['outdated']:print('出口安全：运行中的是旧版规则；同一 UDP 会话的后续数据包尚未受限。请使用菜单 31 → 1 或 sbm security apply 刷新')
+            else:print('出口安全：'+('已应用' if report['applied'] else '尚未应用；请使用菜单 31 或 sbm security apply'))
             print('拒绝本机、内网、链路本地和元数据地址；域名解析后再次检查。')
             if not report['management']:print('本机管理例外：无')
             for kind,item in report['management'].items():

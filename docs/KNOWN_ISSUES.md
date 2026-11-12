@@ -11,6 +11,7 @@
 | 恢复边界 | 缺失审计记录不能靠 repair 重建；需恢复相符的私有备份。修复隔离的封存段不自动清理，保留证据也会占用磁盘。 |
 | 使用限制 | BBR 原设置无法恢复时会保留记录并返回失败；菜单 27 可重试，但不能保证内核接受原参数，需人工排查。 |
 | 使用限制 | 公网检测源全部不可达且网卡无公网地址时，需要管理员用 `sbm security public-ip add` 确认地址；确认列表只用于节点地址核对。 |
+| 使用限制 | v3.6.3 起每个 UDP 会话只能发往首包通过检查的一个目的地，依赖全锥形 NAT 的应用可能无法连接。已应用旧规则的服务器须执行 **31 → 1** 才获得该修复。该修复经 SOCKS 与 Shadowsocks 入站实测；Hysteria2、TUIC 及 TLS 协议的 UDP 使用同一条路由规则，尚未逐一实测。 |
 | 工具边界 | 隐私规则不能识别任意未知账号、少见域名或内部名称；正式发布必须结合非空私有精确匹配清单与人工复核。完整历史 / Release 下载审计尚未接入自动 CI。 |
 
 本机公网地址快照只在应用配置时刷新；地址改变后需要重新应用。私网 / 回环 / 链路本地拒绝仍有效。当前策略拒绝 NAT64、6to4、Teredo 等转换前缀，相关网络可能受影响。
@@ -26,6 +27,8 @@ v3.6.0 已修复：BBR 原设置恢复、APT 公钥指纹固定、审计日志�
 Reviewed for v3.6.1. The four boundary defects found in v3.6.0 are fixed: audit rotation races, missing retained segments reported as pruning, lost BBR recovery records/false success, and acceptance of multicast addresses. Usage limits: BBR is host-wide while enabled (v3.6.0 restores recorded settings; hosts enabled by older versions fall back to cubic); a rotated SagerNet APT key is refused until verified and pinned in a manager update; only the newest 20 audit segments are retained; hosts without reachable detection sources or interface public addresses need `sbm security public-ip add`.
 
 Legacy audit gaps cannot be retrospectively proven as retention; they are explicitly reported as unverified. Older managers cannot parse format 4 rotation headers, and rollback does not convert the logs. All concurrent writers must honor the stable lock; mixed old independent backends are not protected. Appends check only the current segment; `sbm audit` checks retained history. Missing records require matching backup material; repair cannot recreate them. Repair evidence is retained outside automatic cleanup and uses disk space. BBR recovery keeps the saved record on failure but cannot force a kernel to accept settings; menu 27 offers retries. See [guide section 17](USER_GUIDE.en.md#17-v361-boundary-fixes-and-recovery). BBR uses a sysctl double; this patch has not been connected/deployed to a VPS. Signing and publication verification are recorded in the Release notes.
+
+From v3.6.3 one UDP session reaches only the destination checked on its first packet; applications relying on full-cone NAT may fail. Hosts that applied earlier rules need **31 → 1** to receive the fix. It was exercised through SOCKS and Shadowsocks inbounds; UDP over Hysteria2, TUIC and the TLS protocols uses the same route rule and has not been tested individually.
 
 Privacy patterns cannot identify arbitrary unknown accounts or internal names. Maintainer publication requires a non-empty private exact-match list and human review; full history/Release collection and auditing are not automated CI. Local public-address snapshots require reapplication after address changes. Transition prefixes such as NAT64/6to4/Teredo are denied. Establish initial bootstrap trust independently. Menu 18 is a configuration/runtime backup, not a whole-machine backup; ACME cache is not rolled back. An external-cache removal request does not prove deletion.
 

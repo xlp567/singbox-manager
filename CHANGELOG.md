@@ -1,5 +1,15 @@
 # Changelog / 更新记录
 
+## 3.6.3 — 2026-11-12
+
+- 修复出口保护的 UDP 缺口：sing-box 只按 UDP 会话的首个数据包匹配路由，旧规则下同一会话的后续数据包可到达回环、内网或本机地址的 UDP 端口。放行规则加入 `udp_connect`，每个会话只连接首包通过检查的目的地；TCP 拦截不变。
+- 策略标识升为 `public-only-v2`。已应用旧规则的配置仍按原模板精确识别，不阻挡节点修改；`sbm security status` 提示旧版规则，**31 → 1** 或 `sbm security apply` 确认后刷新。
+- 一个 UDP 会话只能发往一个目的地，依赖全锥形 NAT 的应用可能受影响。应用新规则后回退到 v3.6.2 或更早的管理器前，需先恢复应用前的备份。
+
+- Close a UDP gap in the egress policy. sing-box routes a UDP session by its first packet, so later packets of an admitted session could reach UDP ports on loopback, private or host addresses. The allow rule now sets `udp_connect`, binding each session to the checked destination. TCP denial is unchanged.
+- The policy marker becomes `public-only-v2`. A configuration applied by earlier versions is still recognized exactly and does not block node changes. `sbm security status` reports the older rules; refresh with **31 → 1** or `sbm security apply`.
+- One UDP session reaches one destination, which can affect applications relying on full-cone NAT. Restore the pre-apply backup before rolling back to manager v3.6.2 or earlier.
+
 ## 3.6.2 — 2026-11-12
 
 - 菜单 31 增加可独立启用和撤销的本机 SSH、3X-UI 面板例外。仅匹配已核对的本机公网 IP 和指定 TCP 监听端口；面板可选用固定到该 IP 的精确 HTTPS 域名。

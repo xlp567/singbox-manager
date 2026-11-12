@@ -16,6 +16,15 @@
 | 3.6.0 | BBR 原设置恢复、APT 指纹固定、审计分段轮转、多源公网地址 | macOS 311 项通过；本次未部署 VPS |
 | 3.6.1 | 审计轮转互斥、保留边界、BBR 失败恢复记录、仅公网单播 | macOS 338 项通过；本次未连接或部署 VPS |
 | 3.6.2 | 本机 SSH、3X-UI 面板管理例外 | 本地 347 项；1.14.4 隔离连通 39 项通过；未部署 |
+| 3.6.3 | 出口保护 UDP 会话绑定、旧规则识别与刷新 | 本地 361 项；1.14.3 / 1.14.4 隔离连通各 43 项通过；未部署 |
+
+## v3.6.3 — 2026-11-12
+
+- 本地通过 361 项全量测试、Bash 语法、ShellCheck 和脚本 SHA-256 校验。新增 14 项覆盖放行规则的 UDP 绑定、策略标识、旧规则的精确识别与状态提示，以及旧规则主机上的状态查询、节点修改前检查、刷新、失败回滚和刷新后的外部修改检查。
+- 官方 sing-box 1.14.3 与 1.14.4 在本机隔离环境下各通过 43 项 TCP/UDP 路由测试（不含管理例外时 31 项）。新增 4 项在同一 UDP 会话的公网首包之后，再向回环地址、IPv4 映射回环、`localhost` 和解析到回环的域名发送数据包，均未送达。同样的用例在 v3.6.2 源码上有 2 项失败（回环与映射回环的后续数据包到达了本机监听）。
+- 另用内置 Shadowsocks 入站（真实加密，sing-box 作客户端）在本机复现并确认修复。Hysteria2、TUIC 及 TLS 协议的 UDP 未逐一测试。未连接或部署 VPS。
+
+The 361-test local suite, Bash syntax, ShellCheck and script SHA-256 passed; 14 new tests cover UDP binding on the allow rule, the policy marker, exact recognition and reporting of the earlier rules, and status, pre-edit checks, refresh, failed-apply rollback and post-refresh tamper detection on a host running them. Official sing-box 1.14.3 and 1.14.4 each passed 43 isolated TCP/UDP cases (31 without management exceptions). Four new cases send a later packet of an admitted UDP session to loopback, IPv4-mapped loopback, `localhost` and a name resolving to loopback; none was delivered. Two of them fail against the v3.6.2 source. The gap and the fix were also reproduced locally through the built-in Shadowsocks inbound with a sing-box client. UDP over Hysteria2, TUIC and the TLS protocols was not tested individually. No VPS was contacted.
 
 ## v3.6.2 — 2026-11-12
 

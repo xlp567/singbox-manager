@@ -4,7 +4,7 @@
 
 简体中文 · [English](README.en.md) · [中文操作手册](docs/USER_GUIDE.zh-CN.md) · [English guide](docs/USER_GUIDE.en.md)
 
-![Version](https://img.shields.io/badge/version-3.6.2-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
+![Version](https://img.shields.io/badge/version-3.6.3-blue) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-informational)
 
 [正式版本与下载附件](https://github.com/xlp567/singbox-manager/releases/latest)：包含完整源码包、独立管理脚本、安装入口、SHA-256 清单及 Ed25519 签名。
 
@@ -100,6 +100,8 @@ python3 tools/package.py   # 打包完整源码、文档和已发布的验证记
 新配置统一阻止代理访问回环、私网、链路本地、元数据服务和本机接口地址；域名先解析再检查。已有配置升级管理器后，需另选 **31 → 1** 或执行 `sbm security apply`，备份、确认并短暂重启 sing-box 后才生效。仅更新管理器不会改变现有路由。
 
 v3.6.2 在菜单 **31 → 2 / 3** 分别提供本机 SSH 和 3X-UI 面板例外。每项只放行一个本机公网 IP 和一个已核对的 TCP 端口，默认关闭；面板可额外填写原有 HTTPS 域名。使用方法及限制见[中文手册](docs/USER_GUIDE.zh-CN.md#本机-ssh-和-3x-ui-管理例外)。
+
+v3.6.3 修复出口保护的 UDP 缺口：旧规则只检查 UDP 会话的首个数据包，同一会话的后续数据包可到达本机或内网的 UDP 端口。已应用保护的服务器升级管理器后，需再执行一次 **31 → 1** 或 `sbm security apply` 才生效。此后一个 UDP 会话只能发往一个目的地，详见[中文手册](docs/USER_GUIDE.zh-CN.md#udp-会话绑定v363)。
 
 审计损坏改为警告，可用 `sbm audit repair` 保留原文件并续接新链；运行程序备份按摘要去重，成功事务自动保留最近 10 份自动快照，手动及旧版备份保留。安装和升级只接受最新正式 Release 的固定公钥签名，确认前只做静态检查。签名、首次安装信任边界与 SSH 上传说明见[手册第 12 节](docs/USER_GUIDE.zh-CN.md#12-v356-安全与可靠性)。
 
