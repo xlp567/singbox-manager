@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.6.1 - transactional core and independent protocol adapters
+# singbox-manager v3.6.2 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.6.1
+SBM_VERSION=3.6.2
 SHORTCUT=/usr/local/bin/sbm
 # Used by service.sh bundled below; tests redirect them.
 # shellcheck disable=SC2034
@@ -58,15 +58,36 @@ setup_tmp() {
     emit_engine >"$TMP/engine.pyz"
 }
 security_action() {
-    local mode=${1:-menu} choice
+    local mode=${1:-menu} choice kind='' operation='' address='' port='' domain='' default_ip='' default_port='' changed
     require_managed
     if [[ $mode == menu ]]; then
         engine security-status "$CONF/manager.json" "$CONF/config.json"
-        say '1  应用 / 刷新出口安全策略（先备份，sing-box 会短暂重启）'
+        say '1  应用 / 刷新保护（保留管理例外）'
+        say '2  允许通过节点 SSH 管理本机    3  允许访问本机 3X-UI 面板'
+        say '4  撤销 SSH 例外               5  撤销 3X-UI 面板例外'
+        say '6  撤销全部管理例外'
         say '0  返回'
         read -r -p '选择: ' choice || return 0
-        [[ $choice == 1 ]] || return 0
-        mode=apply
+        case $choice in
+            1) mode=apply;;
+            2|3)
+                kind=ssh; [[ $choice != 3 ]] || kind=panel
+                operation=allow;mode=management
+                read -r _ _ default_ip default_port _ <<<"${SSH_CONNECTION:-}"
+                [[ $kind == ssh ]] || default_port=''
+                read -r -p "本机网卡公网 IP${default_ip:+ [$default_ip]}: " address || return 0
+                address=${address:-$default_ip}; [[ -n $address ]] || return 0
+                read -r -p "服务 TCP 端口${default_port:+ [$default_port]}: " port || return 0
+                port=${port:-$default_port}; [[ -n $port ]] || return 0
+                if [[ $kind == panel ]]; then
+                    read -r -p '面板完整域名（HTTPS 可填写；直接用 IP 则留空）: ' domain || return 0
+                fi
+                ;;
+            4|5|6)
+                case $choice in 4) kind=ssh;; 5) kind=panel;; 6) kind=all;; esac
+                operation=revoke;mode=management;;
+            *) return 0;;
+        esac
     fi
     if [[ $mode == status ]]; then engine security-status "$CONF/manager.json" "$CONF/config.json" "${2:-}";return;fi
     if [[ $mode == public-ip ]]; then
@@ -81,10 +102,20 @@ security_action() {
         esac
         return
     fi
-    [[ $mode == apply ]] || die '出口安全操作无效。'
+    if [[ $mode == ssh || $mode == panel || $mode == all ]]; then
+        kind=$mode;operation=${2:-};address=${3:-};port=${4:-};domain=${5:-};mode=management
+    fi
+    [[ $mode == apply || $mode == management ]] || die '出口安全操作无效。'
     [[ ! -e $STATE/draft.json && ! -L $STATE/draft.json ]] || die '有未提交草稿；请先用菜单 22 继续、归档或清理，再应用安全策略。'
-    say '将禁止代理访问本机、内网、链路本地和元数据地址；节点凭据保持不变。'
     prepare_model
+    if [[ $mode == management ]]; then
+        changed=$(engine security-management "$TMP/model.json" "$kind" "$operation" "$address" "$port" "$domain") || return 1
+        if [[ $changed == unchanged ]]; then say '管理例外没有变化。';return 0;fi
+        say '本次修改只应用于 sing-box 出口；生效前会备份并确认，sing-box 将短暂重启。'
+        if [[ $operation == allow ]]; then
+            say "将放行本机 $address TCP/$port${domain:+（仅额外匹配域名 $domain）}。所有使用这些节点的客户端都能连接此端口，仍须通过服务自身登录验证。"
+        else say '将撤销所选管理例外，恢复对这些本机端口的拦截。';fi
+    else say '刷新本机、内网、链路本地和元数据地址保护；现有管理例外及节点凭据保持不变。';fi
     apply_draft "$(active_binary)"
 }
 require_host() {
@@ -166,6 +197,7 @@ apply_draft() {
     # A human/another tool may edit files while the final confirmation is open.
     # Recheck the saved base before stopping any service.
     engine draft-load "$STATE/draft.json" "$CONF" "$TMP/checked-model.json"
+    engine security-management-check "$TMP/model.json"
     begin_transaction
     systemctl stop sing-box
     engine ports "$TMP/model.json" >"$TMP/ports"
@@ -511,6 +543,8 @@ singbox-manager v$SBM_VERSION
   runtime     查看实际运行程序的版本和构建能力，可加 --json
   audit       校验本地审计链，可加 --json；repair 确认后隔离损坏文件并开新链
   security    出口安全：status [--json] / apply（备份后应用，重启 sing-box）
+              ssh allow <公网IP> <端口> / ssh revoke
+              panel allow <公网IP> <端口> [完整域名] / panel revoke / all revoke
               public-ip show|add|remove|clear：确认 NAT / 浮动 IP 的本机公网地址
   version     显示脚本版本
   help        显示本帮助
@@ -557,7 +591,7 @@ action() (
         30) manager_update_action;;
         31) security_action;;
         audit-repair) confirm '保留损坏审计原件，开新链并记录旧链最后有效哈希（不改服务）' && engine audit-repair "$STATE/audit.jsonl";;
-        security) security_action "${2:-menu}" "${3:-}" "${4:-}";;
+        security) shift; security_action "$@";;
         self-update) manager_update_action "${2:-menu}" "${3:-}";;
         protocols) if [[ ${2:-} == --json ]]; then engine protocols --json; else engine protocols --text; fi;;
         compat) require_managed; prepare_model; engine compatibility "$TMP/model.json" "$(active_binary)" "${2:-}";;
@@ -600,6 +634,15 @@ main() {
         case ${2:-menu} in
             menu|apply) (( $#<=2 )) || die '出口安全参数过多。';;
             status) (( $#<=3 )) || die '参数过多。'; [[ -z ${3:-} || ${3:-} == --json ]] || die '仅支持 --json。';;
+            ssh|panel|all)
+                case ${3:-} in
+                    allow)
+                        if [[ $2 == ssh ]]; then (( $#==5 )) || die '用法：sbm security ssh allow <公网IP> <端口>'
+                        elif [[ $2 == panel ]]; then (( $#==5 || $#==6 )) || die '用法：sbm security panel allow <公网IP> <端口> [完整域名]'
+                        else die 'all 仅支持 revoke。';fi;;
+                    revoke) (( $#==3 )) || die '撤销操作不接受额外参数。';;
+                    *) die '管理例外仅支持 allow / revoke。';;
+                esac;;
             public-ip)
                 case ${3:-show} in
                     show|clear) (( $#<=3 )) || die '参数过多。';;
@@ -610,7 +653,7 @@ main() {
         esac
         require_host cli
         [[ ! -f $STATE/pending ]] || die '请先恢复未完成事务。'
-        action security "${2:-menu}" "${3:-}" "${4:-}"
+        action security "${@:2}"
         return
     fi
     if [[ ${1:-} == self-update ]]; then

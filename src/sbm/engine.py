@@ -282,6 +282,7 @@ def preflight(m):
 
 def verify_dns(m):
     local_addresses=network_policy.collect_local()
+    network_policy.verify_management(m,local_addresses)
     names={n['server'] for n in m['nodes'] if n['enabled']}
     if not names:
         network_policy.stamp(m,local_addresses);return
@@ -727,12 +728,26 @@ def main():
     if cmd=='verify-generated':
         if not network_policy.matches(m,load(args[1]),compile_config(m)): fail('检测到 config.json 在脚本外被修改。为保护自定义配置，暂停改动；请先备份并处理差异')
         return
+    if cmd=='security-management':
+        changed=network_policy.configure_management(m,*args[1:])
+        if changed:save(args[0],m)
+        print('changed' if changed else 'unchanged')
+        return
+    if cmd=='security-management-check':
+        if m.get('security',{}).get('management'):
+            network_policy.verify_management(m,network_policy.collect_local())
+        return
     if cmd=='security-status':
         report=network_policy.status(m,load(args[1]),compile_config(m))
         if '--json' in args[2:]:print(json.dumps(report))
         else:
             print('出口安全：'+('已应用' if report['applied'] else '尚未应用；请使用菜单 31 或 sbm security apply'))
             print('拒绝本机、内网、链路本地和元数据地址；域名解析后再次检查。')
+            if not report['management']:print('本机管理例外：无')
+            for kind,item in report['management'].items():
+                label='SSH' if kind=='ssh' else '3X-UI 面板'
+                alias='（域名 '+item['domain']+'）' if 'domain' in item else ''
+                print(f"本机管理例外：{label} {item['address']} TCP/{item['port']}{alias}")
             print('本机地址变化后需重新应用；管理器自升级不会改变正在运行的配置。')
         return
     if cmd=='acme': acme_prompt(m,True)

@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 from common import engine
 from sbm.core import network_policy
 
@@ -51,7 +52,9 @@ def authenticated(port):
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--binary',required=True);parser.add_argument('--report',required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--binary',required=True);parser.add_argument('--report',required=True)
+    parser.add_argument('--management',action='store_true',help='also test exact SSH and panel exceptions')
+    args=parser.parse_args()
     results=[];hits={'tcp':0,'udp':0};stopped=threading.Event()
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -71,17 +74,45 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix='sbm-egress-wire-') as folder:
             root=pathlib.Path(folder);m=engine.new_model();network_policy.stamp(m,['192.0.2.10','2001:db8::10'])
-            config=engine.compile_config(m)
+            management_tcp=[];management_udp=[]
+            if args.management:
+                ssh_port=22022;panel_port=22443
+                m['security']['management']={'ssh':{'address':'192.0.2.10','port':ssh_port},
+                    'panel':{'address':'2001:db8::10','port':panel_port,'domain':'panel.example.com'}}
+                # Reserved documentation addresses cannot be enrolled in production.
+                with patch.object(network_policy,'is_public',return_value=True):
+                    config=engine.compile_config(m)
+                management_tcp=[
+                    ('ssh-exact','192.0.2.10',ssh_port,True),
+                    ('panel-ipv6','2001:db8::10',panel_port,True),
+                    ('panel-exact-domain','panel.example.com',panel_port,True),
+                    ('ssh-wrong-port','192.0.2.10',panel_port,False),
+                    ('panel-wrong-port','2001:db8::10',ssh_port,False),
+                    ('unlisted-domain','own.example',ssh_port,False),
+                    ('panel-domain-wrong-port','panel.example.com',ssh_port,False),
+                    ('different-panel-domain','other.panel.example.com',panel_port,False),
+                    ('loopback-ssh-port','127.0.0.1',ssh_port,False),
+                    ('metadata-panel-port','169.254.169.254',panel_port,False),
+                ]
+                management_udp=[('ssh-udp','192.0.2.10',ssh_port),('panel-udp','panel.example.com',panel_port)]
+            else:config=engine.compile_config(m)
             config['log']={'level':'debug'}
             config['inbounds']=[{'type':'mixed','tag':'fixture','listen':'127.0.0.1','listen_port':port,'users':[{'username':'test','password':'local-tests'}]}]
             public='.'.join(map(str,[8,8,4,4]))
             config['dns']={'servers':[{'type':'hosts','tag':'system','predefined':{
                 'public.example':[public],'lan.example':['127.0.0.1'],'mixed.example':[public,'127.0.0.1'],
-                'own.example':['192.0.2.10'],'metadata.example':['169.254.169.254']}}]}
+                'own.example':['192.0.2.10'],'metadata.example':['169.254.169.254'],
+                'panel.example.com':['127.0.0.1'],'other.panel.example.com':['2001:db8::10']}}]}
             # Test-only mapping AFTER the generated deny rules. A synthetic
             # public destination reaches an origin without Internet access.
             # Production compilation never includes these override fields.
             rules=config['route']['rules'];allowed=rules[-2]
+            if args.management:
+                # Only the real management matches lead to the local test origin.
+                # This substitutes the dial target, not the match fields.
+                for rule in rules[:3]:
+                    assert rule['network']=='tcp' and rule['action']=='route'
+                    rule.update(override_address='127.0.0.1',override_port=origin.server_port)
             config['route']['rules']=rules[:-2]+[
                 dict(allowed,network='tcp',override_address='127.0.0.1',override_port=origin.server_port),
                 dict(allowed,network='udp',override_address='127.0.0.1',override_port=udp.getsockname()[1]),rules[-1]]
@@ -102,30 +133,33 @@ def main():
                     ('cgnat','100.100.100.200'),('own4','192.0.2.10'),('own6','2001:db8::10'),
                     ('localhost-name','localhost'),('resolved-private','lan.example'),('mixed-answer','mixed.example'),
                     ('resolved-own','own.example'),('resolved-metadata','metadata.example'),('dns-failure','missing.example')]
-                for label,host in [*cases,('public-pass','public.example')]:
+                tcp_cases=[(label,host,80,False) for label,host in cases]+[('public-pass','public.example',80,True)]+management_tcp
+                for label,host,target_port,allow in tcp_cases:
                     before=hits['tcp'];response=b''
                     try:
                         with authenticated(port) as stream:
-                            stream.sendall(b'\x05\x01\x00'+encoded(host)+struct.pack('!H',80));reply(stream)
+                            stream.sendall(b'\x05\x01\x00'+encoded(host)+struct.pack('!H',target_port));reply(stream)
                             stream.sendall(b'GET / HTTP/1.0\r\nHost: public.example\r\n\r\n')
                             while True:
                                 data=stream.recv(4096)
                                 if not data:break
                                 response+=data
                     except (OSError,EOFError):pass
-                    passed=(b'sbm-egress-public-pass' in response and hits['tcp']==before+1) if label=='public-pass' else (not response and hits['tcp']==before)
-                    results.append({'case':label,'network':'tcp','expected':'allowed' if label=='public-pass' else 'blocked','passed':passed})
-                for label,host in [*cases[:3],cases[6],cases[13],cases[14],cases[10],('public-pass','public.example')]:
+                    passed=(b'sbm-egress-public-pass' in response and hits['tcp']==before+1) if allow else (not response and hits['tcp']==before)
+                    results.append({'case':label,'network':'tcp','expected':'allowed' if allow else 'blocked','passed':passed})
+                udp_cases=[(label,host,53) for label,host in [*cases[:3],cases[6],cases[13],cases[14],cases[10],('public-pass','public.example')]]+management_udp
+                for label,host,target_port in udp_cases:
                     before=hits['udp'];response=b''
                     with authenticated(port) as control,socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as client:
                         control.sendall(b'\x05\x03\x00\x01'+socket.inet_aton('127.0.0.1')+b'\x00\x00')
                         _,relay=reply(control);client.settimeout(.4)
-                        client.sendto(b'\x00\x00\x00'+encoded(host)+struct.pack('!H',53)+b'sbm-egress-public-pass',('127.0.0.1',relay))
+                        client.sendto(b'\x00\x00\x00'+encoded(host)+struct.pack('!H',target_port)+b'sbm-egress-public-pass',('127.0.0.1',relay))
                         try:response=client.recvfrom(2048)[0]
                         except socket.timeout:pass
                     passed=(response.endswith(b'sbm-egress-public-pass') and hits['udp']==before+1) if label=='public-pass' else (not response and hits['udp']==before)
                     results.append({'case':label,'network':'udp','expected':'allowed' if label=='public-pass' else 'blocked','passed':passed})
-            report={'runtime':'1.14.3','passed':all(r['passed'] for r in results),'cases':results,
+            version=subprocess.check_output([binary,'version'],text=True).splitlines()[0].split()[-1]
+            report={'runtime':version,'passed':all(r['passed'] for r in results),'cases':results,
                 'scope':'real local authenticated SOCKS TCP/UDP through generated policy; test-only public-target redirect after deny rules; no VPS or external connection'}
             pathlib.Path(args.report).write_text(json.dumps(report,indent=2)+'\n')
             print(json.dumps({'passed':report['passed'],'cases':len(results),'failed':[r for r in results if not r['passed']]}))

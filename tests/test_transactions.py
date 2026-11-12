@@ -99,6 +99,22 @@ apply_draft "$TEST_ROOT/candidate"''',1)
         self.assertEqual(engine.load(self.p/'config/config.json'),{'external':True})
         self.assertNotIn('stop sing-box',(self.p/'service.log').read_text() if (self.p/'service.log').exists() else '')
 
+    def test_failed_final_management_endpoint_check_never_stops_service(self):
+        self.run_bash(self.prepare()+'''
+confirmed=0
+confirm() { confirmed=1; }
+engine() {
+    case $1 in
+        netcheck) return 0;;
+        security-management-check) [[ $confirmed == 1 ]] || exit 5; return 1;;
+        *) engine_real "$@";;
+    esac
+}
+apply_draft "$TEST_ROOT/candidate"''',1)
+        self.assertRestored()
+        self.assertFalse((self.p/'service.log').exists())
+        self.assertFalse((self.p/'state/pending').exists())
+
     def test_signal_rolls_back(self):
         output=self.run_bash('begin_transaction\nsystemctl stop sing-box\nkill -TERM $$',143)
         self.assertRestored(); self.assertFalse((self.p/'state/pending').exists(),output)

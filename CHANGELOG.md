@@ -1,5 +1,13 @@
 # Changelog / 更新记录
 
+## 3.6.2 — 2026-11-12
+
+- 菜单 31 增加可独立启用和撤销的本机 SSH、3X-UI 面板例外。仅匹配已核对的本机公网 IP 和指定 TCP 监听端口；面板可选用固定到该 IP 的精确 HTTPS 域名。
+- 默认保持原有出口拦截。生效前复核本机地址和监听进程；配置仍走现有备份、确认及回滚事务。
+
+- Add independent SSH and 3X-UI panel exceptions in menu 31, scoped to a verified local public IP and exact TCP listener port. Optionally pin the panel's existing HTTPS hostname to the verified IP.
+- Preserve strict egress defaults. Recheck interface addresses and listener ownership before applying through the existing backup, confirmation and rollback transaction.
+
 ## 3.6.1 — 2026-10-20
 
 - 审计使用独立锁串行化追加、轮转、清理与修复，校验取得同一把共享锁，修复替换日志后并发写入误删新段的问题。

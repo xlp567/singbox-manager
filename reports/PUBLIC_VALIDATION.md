@@ -15,6 +15,14 @@
 | 3.5.9 | 截断响应检测与重试、元数据解析错误提示 | macOS 289 项通过；本次未部署 VPS |
 | 3.6.0 | BBR 原设置恢复、APT 指纹固定、审计分段轮转、多源公网地址 | macOS 311 项通过；本次未部署 VPS |
 | 3.6.1 | 审计轮转互斥、保留边界、BBR 失败恢复记录、仅公网单播 | macOS 338 项通过；本次未连接或部署 VPS |
+| 3.6.2 | 本机 SSH、3X-UI 面板管理例外 | 本地 347 项；1.14.4 隔离连通 39 项通过；未部署 |
+
+## v3.6.2 — 2026-11-12
+
+- 本地通过 347 项全量测试、Bash 语法、ShellCheck 和脚本 SHA-256 校验，含提交前监听核对失败时保持服务的事务用例。无管理例外时，含地址快照及不含快照的样例配置与 v3.6.1 编译结果一致。
+- 官方 sing-box 1.14.4 在本机隔离环境下通过 39 项 TCP/UDP 路由测试：原有 27 项拦截与公网路径，以及 12 项精确管理规则和负向用例。通过 SOCKS 测试规则匹配，测试目标替换为回环服务，未连接实际 SSH 或 3X-UI 服务，未部署 VPS。
+
+Local verification passed the 347-test full suite, Bash syntax, ShellCheck and script SHA-256, including a transaction test preserving the service when the final listener check fails. Configurations without management exceptions match v3.6.1 for both fixtures. Official sing-box 1.14.4 passed 39 isolated TCP/UDP cases (27 existing and 12 management cases). The SOCKS tests exercise actual routing with loopback test targets, not live SSH or 3X-UI logins. No VPS deployment was performed.
 
 ## v3.6.1 — 2026-10-20
 

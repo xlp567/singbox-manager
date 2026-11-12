@@ -197,6 +197,22 @@ Generated configurations reject loopback, private, link-local, metadata, multica
 
 After updating the manager, run `sbm security status`, then **31 → 1** or `sbm security apply`. Only this separately confirmed transaction changes live routes, with a backup and brief sing-box restart. Node credentials and client exports remain compatible. Only an exact historical generated configuration is recognized for migration; unknown edits still block overwriting. Stripping an applied policy triggers external-change protection.
 
+### Local SSH and 3X-UI management exceptions
+
+For personal nodes, use **31 → 2** for SSH and **31 → 3** for the 3X-UI panel. Each needs a public IP assigned to the host interface and the service's current TCP listener port. The manager checks listener ownership. Use the enrolled IP for SSH. The panel may additionally use its existing exact HTTPS hostname, pinned to the verified IP while preserving normal TLS and certificate validation. Configure the client to send that traffic through the node.
+
+Both exceptions are off by default. Any client that can use the manager's nodes can reach the enabled port, subject to the service's own authentication. Other local ports, UDP, private networks, loopback and metadata remain blocked. The feature supports direct SSH and `x-ui` listeners on the host's public address; an off-interface NAT address, a loopback-only panel or a reverse-proxy listener does not qualify.
+
+Use **31 → 4 / 5** to revoke one exception, **31 → 6** to revoke both, or **31 → 1** to refresh and recheck the existing exceptions. Applying changes asks for confirmation, takes a backup and briefly restarts sing-box. Revoke an exception before changing its IP, listener port or service ownership. Revoke both before rolling back to manager v3.6.1 or earlier, which does not recognize the new field.
+
+```bash
+sbm security ssh allow <public-IP> <port>
+sbm security panel allow <public-IP> <port> [exact-hostname]
+sbm security ssh revoke
+sbm security panel revoke
+sbm security all revoke
+```
+
 Local addresses are captured during application; apply again after interface IP changes. This is proxy egress policy, not a host firewall, and does not change SSH, 3X-UI or Xray. NAT64, 6to4 and Teredo prefixes are rejected; networks relying on these need a separate policy design. Ordinary forms do not offer disabling protection.
 
 An existing unfinished draft blocks security application rather than being overwritten; resume, archive or purge it through menu 22 first.
