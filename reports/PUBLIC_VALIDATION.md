@@ -2,6 +2,16 @@
 
 原始日志、真实地址、SSH 端口、主机名、节点域名、登录资料及备份位置仅保存在私有目录；以下只发布能力与结果。
 
+## v3.6.5 — 2026-11-13
+
+- v3.6.4 的实机验证覆盖了六种结果页面，却遗漏了子菜单的 `0` 返回路径；原有替身 action 测试也不能证明真实子菜单的返回行为。本版先用真实子菜单 / action / cleanup 路径复现问题，再修复并补上 9 项回归（包括伪终端验证）。
+- macOS 与授权练手 Debian 均通过 **379/379** 自动化测试、Bash 语法、ShellCheck 和脚本 SHA-256。明确验证菜单 **22、28、30、31** 的单次返回、连续进入退出、CLI 返回、无效选项重试、草稿空行默认、成功审计，以及外部失败不能误判为返回。真实操作结果仍保留等待。
+- 练手 VPS 在真实终端连续 **3 轮**完成上述四个子菜单的 **12 次返回**、**24 次无效选项重试**；每次返回后立即选择节点列表，验证下一条操作不会被多余的结果等待吞掉。共 **18 次结果页**检查通过，另有 **12 个 CLI** 检查通过（含四个子菜单直接退出）。
+- 完整备份已在服务器和本地核对；通过已安装管理器验签后，从 v3.6.4 更新到 **v3.6.5**。两个既有 AnyTLS / Hysteria2 节点在升级前后各完成 3 次外部 HTTPS 请求，共 **12/12**。配置、节点凭据、Runtime、sing-box / 3X-UI / Xray 原进程及受保护文件保持一致，无待恢复标记。
+- 未调用出口策略应用、重启代理、切换核心或改动其他服务器。测试依赖只在私有目录解包。源码、内嵌引擎及发布说明经过严格隐私检查；历史 / Release 下载材料单独复核，签名与发布后匿名读回结果记录在 Release 正文。原始日志和备份不公开。
+
+v3.6.4 live testing covered six result pages but missed submenu `0` returns; its replaced action dispatcher could not establish real submenu behavior. This release first reproduced the problem through the real submenu/action/cleanup functions, then added nine regressions, including a pseudo-terminal test. Both macOS and the authorized Debian host passed **379/379** tests, Bash syntax, ShellCheck and checksums. Three live-terminal rounds exercised **12 returns** from menus **22 / 28 / 30 / 31**, **24 invalid-choice retries**, an immediate node-list action after each return, **18 retained result pages** and **12 CLI checks**. Navigation remains a successful audited action; real results still wait, and external failures cannot masquerade as navigation. A full backup was verified remotely and locally before the signed v3.6.4 → **v3.6.5** manager update. The two existing nodes passed **12/12** external HTTPS requests before/after. Configuration, credentials, runtime bytes, original sing-box / 3X-UI / Xray processes and protected files stayed unchanged. No policy was applied and no proxy was restarted. Test tools and raw records remain private. Privacy/publication checks and anonymous readback are recorded separately in the Release notes.
+
 ## v3.6.4 — 2026-11-13
 
 - macOS 和授权练手 Debian 各通过 **370/370** 自动化测试、Bash 语法、ShellCheck 与脚本 SHA-256 校验。新增 9 项菜单用例覆盖结果等待 `0`、结果页不派发其他菜单编号、无效选择不重画、失败信息停留、EOF、直接 CLI、日志中断和升级/恢复退出。Debian 首轮有两项因缺少 Git 报错；仅在私有测试目录解包 Git / ShellCheck 后，重跑完整套件通过，未安装系统软件。
@@ -28,6 +38,7 @@ Both macOS and the authorized Debian practice host passed **370/370** tests, Bas
 | 3.6.2 | 本机 SSH、3X-UI 面板管理例外 | 本地 347 项；1.14.4 隔离连通 39 项通过；未部署 |
 | 3.6.3 | 出口保护 UDP 会话绑定、旧规则识别与刷新 | 本地 361 项；1.14.3 / 1.14.4 隔离连通各 43 项通过；未部署 |
 | 3.6.4 | 菜单结果页停留、输入重试、CLI 保持直接退出 | macOS / Debian 各 370 项；实机 3 轮菜单及既有节点连接通过；已部署练手机 |
+| 3.6.5 | 修复子菜单重复返回，补齐真实子菜单验收 | macOS / Debian 各 379 项；实机四个子菜单各 3 轮通过；已部署练手机 |
 
 ## v3.6.3 — 2026-11-12
 

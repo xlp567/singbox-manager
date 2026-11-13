@@ -1,5 +1,15 @@
 # Changelog / 更新记录
 
+## 3.6.5 — 2026-11-13
+
+- 修复菜单 31、22、28 选择 `0` 返回后仍需再输入 `0` 的问题；菜单 30 的 `0` 也统一返回主菜单。真实操作结果仍停留供查看，成功升级后仍退出以重新载入脚本。
+- 四个子菜单的无效输入只重试提示，保留草稿菜单空行默认项；正常返回记录为审计成功，直接 CLI 子菜单返回时仍以成功状态退出。
+- v3.6.4 的实机验收遗漏了子菜单返回路径。本版增加真实菜单处理与清理逻辑的回归测试，不再只以替身 action 验证这一行为。
+
+- Fix the extra result pause after returning with `0` from menus 31, 22 and 28. Menu 30 now also returns to the main menu with `0`; actual results still wait for acknowledgement and a completed update still exits for reloading.
+- Invalid submenu choices retry only the prompt; the draft menu retains its blank-input default. Navigation is audited as success and direct CLI submenus still exit successfully.
+- v3.6.4 live acceptance missed submenu return paths. New regressions exercise the real submenu/action/cleanup functions rather than replacing the action dispatcher.
+
 ## 3.6.4 — 2026-11-13
 
 - 交互菜单操作后停留在结果页，输入 `0` 返回主菜单；无效输入只重试提示，不再重打整张菜单。终端切页只清理当前画面，保留终端滚动历史。直接 CLI 命令保持输出后退出；实时日志 `Ctrl+C` 与管理器升级的退出行为保持不变。

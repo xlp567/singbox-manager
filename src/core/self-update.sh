@@ -9,8 +9,8 @@ manager_update_action() {
         say '3  回退到之前的管理脚本'
         say '4  配置 GitHub 仓库 / 私有仓库只读令牌'
         say '0  返回'
-        read -r -p '升级方式: ' choice || return 0
-        case $choice in 1) mode=local;; 2) mode=github;; 3) mode=rollback;; 4) mode=configure;; 0) return 0;; *) die '升级方式无效。';; esac
+        menu_read_choice choice '升级方式: ' '^[0-4]$' || return 0
+        case $choice in 1) mode=local;; 2) mode=github;; 3) mode=rollback;; 4) mode=configure;; 0) menu_back; return 0;; *) die '升级方式无效。';; esac
     fi
     if [[ $mode == configure ]]; then engine manager-update configure "$STATE"; return; fi
     if [[ $mode == rollback ]]; then

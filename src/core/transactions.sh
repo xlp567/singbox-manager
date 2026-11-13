@@ -101,6 +101,13 @@ cleanup() {
         else audit_record action-finish failed || true; fi
     fi
     [[ -z $TMP ]] || rm -rf -- "$TMP"
+    # Preserve successful audit/cleanup, then tell the main menu to skip its
+    # result pause. CLI returns stay zero; an external error 77 stays an error.
+    if (( rc==0 )) && [[ ${MENU_ACTIVE:-0} == 1 && ${MENU_RETURN_REQUESTED:-0} == 1 ]]; then
+        rc=77
+    elif (( rc==77 )); then
+        rc=1
+    fi
     exit "$rc"
 }
 begin_transaction() {

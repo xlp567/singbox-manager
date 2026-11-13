@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.6.4 - transactional core and independent protocol adapters
+# singbox-manager v3.6.5 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.6.4
+SBM_VERSION=3.6.5
 SHORTCUT=/usr/local/bin/sbm
 # Used by service.sh bundled below; tests redirect them.
 # shellcheck disable=SC2034
@@ -48,6 +48,22 @@ menu_wait_return() {
         [[ $answer != 0 ]] || return 0
         say '当前为结果页，请输入 0 返回主菜单。'
     done
+}
+menu_read_choice() {
+    local destination=$1 prompt=$2 pattern=$3 default=${4:-} answer
+    while true; do
+        read -r -p "$prompt" answer || return 1
+        answer=${answer:-$default}
+        if [[ $answer =~ $pattern ]]; then
+            printf -v "$destination" '%s' "$answer"
+            return 0
+        fi
+        say '无效选择，请重新输入。'
+    done
+}
+menu_back() {
+    # Navigation is a successful action, not an operation result to pause on.
+    MENU_RETURN_REQUESTED=1
 }
 confirm() {
     local answer
@@ -83,7 +99,7 @@ security_action() {
         say '4  撤销 SSH 例外               5  撤销 3X-UI 面板例外'
         say '6  撤销全部管理例外'
         say '0  返回'
-        read -r -p '选择: ' choice || return 0
+        menu_read_choice choice '选择: ' '^[0-6]$' || return 0
         case $choice in
             1) mode=apply;;
             2|3)
@@ -102,7 +118,7 @@ security_action() {
             4|5|6)
                 case $choice in 4) kind=ssh;; 5) kind=panel;; 6) kind=all;; esac
                 operation=revoke;mode=management;;
-            *) return 0;;
+            0) menu_back; return 0;;
         esac
     fi
     if [[ $mode == status ]]; then engine security-status "$CONF/manager.json" "$CONF/config.json" "${2:-}";return;fi
@@ -315,14 +331,14 @@ draft_action() {
     say '4  彻底删除当前草稿（不再归档）'
     say '5  彻底清空已归档草稿（释放空间）'
     say '0  返回'
-    read -r -p '草稿操作 [1]: ' choice || return 0
+    menu_read_choice choice '草稿操作 [1]: ' '^[0-5]$' 1 || return 0
     case ${choice:-1} in
         1) resume_draft;;
         2) engine draft-summary "$STATE/draft.json";;
         3) draft_discard_action;;
         4) draft_purge_action;;
         5) draft_archives_purge_action;;
-        0) return 0;;
+        0) menu_back; return 0;;
         *) die '草稿操作序号无效。';;
     esac
 }
@@ -367,7 +383,7 @@ protocol_action() {
     say '5  高级：手工 JSON 模板向导'
     say '6  扫描当前核心的全部官方协议'
     say '0  返回'
-    read -r -p '模块操作: ' choice || return 0
+    menu_read_choice choice '模块操作: ' '^[0-6]$' || return 0
     case $choice in
         1) engine official create "$(active_binary)";;
         2) read -r -p '协议模板 JSON 路径: ' path; engine profile import "$path" "$(active_binary)";;
@@ -375,7 +391,7 @@ protocol_action() {
         4) read -r -p '待移除模块标识: ' kind; engine profile delete "$kind" "$CONF" "$STATE";;
         5) engine profile create "$(active_binary)";;
         6) engine official list "$(active_binary)";;
-        0) return 0;;
+        0) menu_back; return 0;;
         *) die '模块操作序号无效。';;
     esac
 }
@@ -568,6 +584,9 @@ USAGE
 }
 action() (
     set -Eeuo pipefail
+    # Consumed by cleanup() in the bundled transactions.sh module.
+    # shellcheck disable=SC2034
+    MENU_RETURN_REQUESTED=0
     trap cleanup EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
@@ -639,7 +658,7 @@ resolve_action() {
     esac
 }
 main() {
-    local resolved
+    local resolved MENU_ACTIVE=0
     if [[ ${1:-} == audit && ${2:-} == repair ]]; then
         (( $#==2 )) || die '审计修复不支持额外参数。'
         require_host cli
@@ -758,6 +777,9 @@ main() {
     # Recovery is deliberately before the menu; errors must not silently continue.
     recover_pending || die '未完成事务尚未恢复。'
     action dash || { local dash_rc=$?; (( dash_rc!=76 )) || return 0; }
+    # Consumed by cleanup() in the bundled transactions.sh module.
+    # shellcheck disable=SC2034
+    MENU_ACTIVE=1
     trap ':' INT
     local n rc
     while true; do
@@ -803,6 +825,8 @@ MENU
         menu_clear
         action "$n"
         rc=$?
+        # cleanup emits 77 only for an explicit, successful submenu return.
+        if (( rc==77 )); then menu_clear; continue; fi
         if [[ $n == 30 || $rc == 76 ]]; then return 0; fi
         if (( rc!=0 && rc!=130 )); then say "操作未完成（退出码 ${rc}）；请查看上方原因。"; fi
         # Ctrl+C already explicitly requests a return (notably for live logs).
