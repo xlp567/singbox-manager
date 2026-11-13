@@ -1,5 +1,6 @@
 """Manager-only updates. Never modifies sing-box configuration or controls services."""
 import base64
+from .interaction import read_input, check_cancel
 import getpass
 import hashlib
 import http.client
@@ -250,11 +251,11 @@ def command(args):
         return
     if op=='configure':
         state=args[1];old=source(state)
-        repository=input('GitHub 仓库 owner/repo ['+old['repository']+']: ').strip() or old['repository']
+        repository=read_input('GitHub 仓库 owner/repo ['+old['repository']+']: ').strip() or old['repository']
         print('升级渠道：最新正式 Release（固定 stable；不跟踪分支）')
         value={'repository':repository,'channel':'stable'}
         if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',repository):raise ValueError('仓库格式无效')
-        token=getpass.getpass('私有仓库只读令牌（仅所选仓库 Contents:read；留空保留已有令牌）: ').strip()
+        token=check_cancel(getpass.getpass('私有仓库只读令牌（仅所选仓库 Contents:read；留空保留已有令牌；/cancel 取消）: ')).strip()
         if token and not re.fullmatch(r'[A-Za-z0-9_]{10,255}',token):raise ValueError('令牌格式无效')
         save(pathlib.Path(state)/'update-source.json',value)
         if token:atomic_bytes(pathlib.Path(state)/'github-token',token.encode(),0o600)

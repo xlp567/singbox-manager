@@ -21,7 +21,7 @@ action() {
         dash) echo DASHBOARD;;
         12) echo DIAGNOSTIC_FAILED; return 7;;
         13) echo LOG_INTERRUPTED; return 130;;
-        30) echo UPDATE_EXIT;;
+        30) echo UPDATE_EXIT; return 76;;
         31) echo RECOVERY_EXIT; return 76;;
         *) echo "RESULT:$1";;
     esac

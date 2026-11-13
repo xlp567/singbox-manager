@@ -91,19 +91,25 @@ cleanup() {
             audit_record rollback ok "${TX##*/}" || say '警告：恢复成功，但审计日志未能写入。' >&2
             say '回滚完成。' >&2
         else
+            rc=1
             audit_record rollback failed "${TX##*/}" || true
             say "回滚未完成；保留恢复标记和备份 ${TX}，下次运行可恢复。" >&2
         fi
     fi
     if (( POLICY )) && grep -qx '# singbox-manager temporary policy' /usr/sbin/policy-rc.d 2>/dev/null; then rm -f /usr/sbin/policy-rc.d; fi
     if [[ $ACTION_ID != audit ]]; then
-        if (( rc==0 )); then audit_record action-finish ok || say '警告：操作已完成，但审计日志未能写入。' >&2
+        if (( rc==78 || rc==130 )) || [[ ${MENU_CANCELLED:-0} == 1 && $rc == 0 ]]; then audit_record action-finish cancelled || true
+        elif (( rc==0 )); then audit_record action-finish ok || say '警告：操作已完成，但审计日志未能写入。' >&2
         else audit_record action-finish failed || true; fi
     fi
     [[ -z $TMP ]] || rm -rf -- "$TMP"
     # Preserve successful audit/cleanup, then tell the main menu to skip its
     # result pause. CLI returns stay zero; an external error 77 stays an error.
-    if (( rc==0 )) && [[ ${MENU_ACTIVE:-0} == 1 && ${MENU_RETURN_REQUESTED:-0} == 1 ]]; then
+    if (( rc==78 )) || [[ $rc == 0 && ${MENU_CANCELLED:-0} == 1 ]]; then
+        if [[ ${MENU_ACTIVE:-0} == 1 ]]; then rc=77; else rc=0; fi
+    elif (( rc==0 )) && [[ ${MENU_RELOAD:-0} == 1 && ${MENU_ACTIVE:-0} == 1 ]]; then
+        rc=76
+    elif (( rc==0 )) && [[ ${MENU_ACTIVE:-0} == 1 && ${MENU_RETURN_REQUESTED:-0} == 1 ]]; then
         rc=77
     elif (( rc==77 )); then
         rc=1

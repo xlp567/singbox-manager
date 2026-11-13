@@ -1,4 +1,5 @@
 """Interactive data-only protocol creation; installed JSON never contains executable code."""
+from .core.interaction import Cancelled, read_input
 import copy
 import datetime
 import json
@@ -14,7 +15,7 @@ def json_input(label,default,ctx):
     for attempt in range(ctx.TRIES):
         lines=[]
         while True:
-            line=input('JSON> ')
+            line=read_input('JSON（/cancel 取消）> ')
             if not lines and not line.strip():return copy.deepcopy(default)
             if line.strip()=='END':break
             lines.append(line)
@@ -75,7 +76,7 @@ def remove(kind,conf,state,ctx):
         if any(n.get('kind')==kind for n in m.get('nodes',[])):raise ValueError('线上节点或未提交草稿仍引用此模块，请先处理节点 / 草稿')
     path=pathlib.Path(MODULE_DIRECTORY)/(kind+'.json')
     if path.is_symlink() or not path.is_file():raise ValueError('模块文件不存在或路径异常')
-    if ctx.prompt('将自定义模块归档移除，输入 DELETE 确认')!='DELETE':raise ValueError('已取消模块移除')
+    if ctx.prompt('将自定义模块归档移除，输入 DELETE 确认')!='DELETE':raise Cancelled()
     archive=pathlib.Path(state)/'archived-protocols';archive.mkdir(parents=True,exist_ok=True);os.chmod(archive,0o700)
     dest=archive/(kind+'-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'.json')
     os.replace(path,dest);os.chmod(dest,0o600);ctx.sync_directory(path.parent);ctx.sync_directory(archive)

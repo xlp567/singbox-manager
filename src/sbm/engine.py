@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Stable offline management engine. Protocol behavior lives in adapters."""
+from .core.interaction import Cancelled, check_cancel, read_input
 import base64, copy, datetime, getpass, hashlib, ipaddress, json, os, pathlib, re
 import secrets, socket, subprocess, sys, tarfile, urllib.parse, urllib.request, uuid
 from .protocols import ADAPTERS, get as protocol
@@ -22,7 +23,7 @@ def load(p): return json.loads(pathlib.Path(p).read_text())
 
 
 def prompt(label, default=None):
-    x=input(label + (f' [{default}]' if default is not None else '') + ': ').strip()
+    x=read_input(label + (f' [{default}]' if default is not None else '') + ': ').strip()
     return x if x else (str(default) if default is not None else '')
 TRIES = 5
 def ask(label, parse, default=None):
@@ -37,7 +38,11 @@ def ask(label, parse, default=None):
 def choose(label,opts,default=1):
     print(label)
     for i,s in enumerate(opts,1): print(f'  {i}) {s}')
-    return ask('选择',lambda s: number(s,1,len(opts)),default)-1
+    print('  0) 返回 / 取消')
+    def selection(value):
+        if value == '0': raise Cancelled()
+        return number(value,1,len(opts))
+    return ask('选择',selection,default)-1
 
 def check_password(s,method=None):
     if '\n' in s or '\r' in s: fail('密码不能包含换行')
@@ -56,7 +61,7 @@ def password(label,old=None,method=None,rotate=False):
     if rotate: return generate()
     desc='留空保留；输入 ! 生成新密码' if old else '留空自动生成'
     for i in range(TRIES):
-        s=getpass.getpass(f'{label}（{desc}）: ')
+        s=check_cancel(getpass.getpass(f'{label}（{desc}；/cancel 取消）: '))
         if not s and old: return old
         if not s or s=='!': return generate()
         try: return check_password(s,method)
@@ -198,7 +203,11 @@ def list_nodes(m):
 def pick(m):
     list_nodes(m)
     if not m['nodes']: fail('没有节点')
-    return number(prompt('节点序号'),1,len(m['nodes']))-1
+    print('  0) 返回（空行或 /cancel 也取消）')
+    def selection(value):
+        if value in {'', '0'}: raise Cancelled()
+        return number(value,1,len(m['nodes']))
+    return ask('节点序号',selection)-1
 
 def networks(n):
     return list(protocol(n['kind']).networks)
@@ -403,7 +412,7 @@ def select_release(p,out,current=''):
         x=l
     else:
         idx=choose('版本列表',[f"{v['version']} ({'测试' if v['preview'] else '稳定'}){'（当前运行）' if v['version']==current else ''}" for v in r['all']]); x=r['all'][idx]
-    if x['preview'] and x['version']!=current and prompt('测试版可能有不兼容改动，输入 PREVIEW 确认')!='PREVIEW': fail('未选择测试版')
+    if x['preview'] and x['version']!=current and prompt('测试版可能有不兼容改动，输入 PREVIEW 确认')!='PREVIEW': raise Cancelled()
     save(out,x)
 
 def extract_release(meta,archive,dest,companions=None):
@@ -768,17 +777,19 @@ def main():
         i=pick(m); m['nodes'][i]['enabled']=not m['nodes'][i]['enabled']
     elif cmd=='delete':
         i=pick(m)
-        if prompt('输入 DELETE 删除此节点')!='DELETE': fail('取消删除')
+        if prompt('输入 DELETE 删除此节点')!='DELETE': raise Cancelled()
         del m['nodes'][i]
     elif cmd=='rotate':
         n=m['nodes'][pick(m)]
-        if prompt('旧客户端凭据将失效；输入 ROTATE 确认')!='ROTATE': fail('取消重置')
+        if prompt('旧客户端凭据将失效；输入 ROTATE 确认')!='ROTATE': raise Cancelled()
         protocol(n['kind']).rotate(n, CTX, args[1])
     else: fail('未知操作 '+cmd)
     validation(m); save(args[0],m)
 
 def run():
     try: main()
-    except (ValueError,KeyError,TypeError,AttributeError,IndexError,OSError,EOFError,subprocess.SubprocessError) as e:
+    except (Cancelled, EOFError):
+        print('已取消，未提交的编辑已丢弃。',file=sys.stderr);sys.exit(78)
+    except (ValueError,KeyError,TypeError,AttributeError,IndexError,OSError,subprocess.SubprocessError) as e:
         print('错误：'+str(e),file=sys.stderr); sys.exit(1)
     except KeyboardInterrupt: print('\n已取消，未提交的编辑已丢弃。',file=sys.stderr); sys.exit(130)

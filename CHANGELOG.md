@@ -1,5 +1,15 @@
 # Changelog / 更新记录
 
+## 3.6.6 — 2026-11-13
+
+- 统一选择页 0、表单 /cancel、确认取消与 EOF；正常取消不再报错或要求二次返回，草稿保留规则不变。
+- 修复菜单 30 取消/失败也退出管理器的问题；只有安装成功才退出，失败提示保留。
+- 节点/恢复/清理选择支持返回和重输，节点删除、凭据重置及模块移除取消独立记录。
+- BBR 模块加载移至用户确认后；回滚失败不会被取消状态掩盖。
+- 新增实际动作、Python 引擎、伪终端、审计与无写入回归；实机与发布验证见公开验证摘要和 Release 正文。
+
+Unify selection `0`, form `/cancel`, confirmation cancellation and EOF without double returns or false errors. Keep saved drafts. Menu 30 exits only after a successful manager installation and retains failures. Add retry/return handling for node, restore and cleanup choices; audit cancellation distinctly. Defer BBR module loading until consent and preserve rollback failures. Add real-action/engine/terminal and no-write regressions; see public validation and Release notes for deployment evidence.
+
 ## 3.6.5 — 2026-11-13
 
 - 修复菜单 31、22、28 选择 `0` 返回后仍需再输入 `0` 的问题；菜单 30 的 `0` 也统一返回主菜单。真实操作结果仍停留供查看，成功升级后仍退出以重新载入脚本。

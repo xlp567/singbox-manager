@@ -15,13 +15,13 @@ manager_update_action() {
     if [[ $mode == configure ]]; then engine manager-update configure "$STATE"; return; fi
     if [[ $mode == rollback ]]; then
         engine manager-update list "$STATE"
-        read -r -p '选择要回退的脚本备份完整目录（空行取消）: ' backup || return 0
-        [[ -n $backup ]] || return 0
+        read_field backup '选择要回退的脚本备份完整目录（空行或 /cancel 取消）: '
+        [[ -n $backup ]] || cancel_action
         engine manager-update rollback-stage "$STATE" "$backup" /root "$SHORTCUT" "$TMP"
         operation=install-rollback
         say '提示：旧备份可能没有发布签名；回退可能丢失新版安全修复。仅使用本机已校验备份。'
     elif [[ $mode == local ]]; then
-        if [[ -z $path ]]; then read -r -p '已上传的新版脚本路径 [/root/singbox-manager.sh]: ' path || return 0; fi
+        if [[ -z $path ]]; then read_field path '已上传的新版脚本路径 [/root/singbox-manager.sh]（/cancel 取消）: '; fi
         path=${path:-/root/singbox-manager.sh}
         [[ ${path%/*} == /root && $path == *.sh && ! -L $path ]] || die '请将新版 .sh 普通文件通过 SSH/SCP 上传到 /root。'
         checksum=${path%.sh}.sha256
@@ -49,5 +49,8 @@ manager_update_action() {
     engine manager-update "$operation" "$TMP/singbox-manager.sh" "$TMP/singbox-manager.sha256" "$STATE" /root "$SHORTCUT"
     ACTION_ID=self-update audit_record action-finish ok || say '警告：脚本已安装，但审计未能写入。' >&2
     say "管理脚本安装完成；旧脚本备份：$STATE/manager-backups/"
-    say '请退出当前菜单，再运行 sbm 使用新版。'
+    say '请重新运行 sbm 使用新版。'
+    # Consumed by cleanup only after a successful installation.
+    # shellcheck disable=SC2034
+    MENU_RELOAD=1
 }

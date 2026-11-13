@@ -2,6 +2,16 @@
 
 原始日志、真实地址、SSH 端口、主机名、节点域名、登录资料及备份位置仅保存在私有目录；以下只发布能力与结果。
 
+## v3.6.6 — 2026-11-13
+
+- 六类导航问题已修复：菜单 30 仅成功安装才退出；取消删除/重置不报失败；选择页支持 0 返回和无效重输；确认取消不再二次等待；BBR 确认后才加载模块；EOF 作为取消处理。普通表单支持 /cancel，数值 0 和空默认值保持各自语义。
+- macOS 与练手 Debian 各 **400/400** 项测试通过（新增 21 项），Bash 语法、ShellCheck 和构建摘要通过。测试使用实际菜单/动作/引擎，外部服务在临时目录中替代；包含真实伪终端、取消审计、草稿保留、失败升级和回滚失败不被取消掩盖。
+- 练手服务器完整备份已在两端核验，通过原管理器验签完成 **v3.6.5 → v3.6.6**。三个真实终端轮次，共 **132/132** 条场景通过：取消、返回、无效输入重试、EOF、Ctrl+C、升级错误保留以及结果页停留。
+- 两个既有 AnyTLS / Hysteria2 节点在升级前后各完成 3 次外部 HTTPS 请求，共 **12/12**。原节点凭据、配置、Runtime、sing-box / 3X-UI / Xray 原进程、8 项受保护文件及 BBR 参数均保持一致；未应用出口策略、未重启代理服务。
+- BBR 模块加载/失败及启停、删除、恢复等破坏性分支在隔离环境验证，没有切换真实内核参数或中断现有节点。未穷举全部协议字段或所有网络故障；测试通过不等于不存在其他问题。GitHub 同版本拉取与发布匿名读回在 Release 正文另行记录；原始记录仅私有保留。
+
+The six navigation issue categories are fixed with explicit cancellation separate from failure. Both macOS and the authorized Debian host passed **400/400** tests (21 added), Bash syntax, ShellCheck and checksums. Tests exercise real actions/engine/cleanup and terminal input while substituting external services in isolated directories. A verified full backup preceded the signed **v3.6.5 → v3.6.6** manager update. Three live-terminal rounds passed **132/132** scenarios, including invalid input, cancellation, EOF, Ctrl+C and visible update failures. Existing AnyTLS/Hysteria2 nodes passed **12/12** external HTTPS requests before/after. Configuration, credentials, runtime, original sing-box/3X-UI/Xray processes, eight protected files and host BBR settings stayed unchanged. Destructive branches and BBR loading were tested in isolation; no live kernel change, policy application or proxy restart was performed. Not every protocol field or network fault is covered. Release readback and GitHub updater verification are recorded separately; raw evidence stays private.
+
 ## v3.6.5 — 2026-11-13
 
 - v3.6.4 的实机验证覆盖了六种结果页面，却遗漏了子菜单的 `0` 返回路径；原有替身 action 测试也不能证明真实子菜单的返回行为。本版先用真实子菜单 / action / cleanup 路径复现问题，再修复并补上 9 项回归（包括伪终端验证）。
@@ -38,6 +48,7 @@ Both macOS and the authorized Debian practice host passed **370/370** tests, Bas
 | 3.6.2 | 本机 SSH、3X-UI 面板管理例外 | 本地 347 项；1.14.4 隔离连通 39 项通过；未部署 |
 | 3.6.3 | 出口保护 UDP 会话绑定、旧规则识别与刷新 | 本地 361 项；1.14.3 / 1.14.4 隔离连通各 43 项通过；未部署 |
 | 3.6.4 | 菜单结果页停留、输入重试、CLI 保持直接退出 | macOS / Debian 各 370 项；实机 3 轮菜单及既有节点连接通过；已部署练手机 |
+| 3.6.6 | 统一返回、取消和输入结束；确认后才加载 BBR 模块 | macOS / Debian 各 400 项；132 条真实终端场景；已部署练手机 |
 | 3.6.5 | 修复子菜单重复返回，补齐真实子菜单验收 | macOS / Debian 各 379 项；实机四个子菜单各 3 轮通过；已部署练手机 |
 
 ## v3.6.3 — 2026-11-12

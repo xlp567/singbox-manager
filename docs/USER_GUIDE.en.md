@@ -290,3 +290,12 @@ When a GitHub response ends before its declared length, the read is treated as a
 - **Public addresses**: detection, interface addresses and operator confirmation accept public unicast only, rejecting multicast, unspecified, loopback, link-local and reserved addresses.
 
 BBR recovery is tested using a sysctl double, not a live kernel. This version has not been deployed to a VPS. A manager update does not apply these network operations automatically.
+
+## v3.6.6: return and cancellation
+
+- Enter `0` on selection screens to return. Node and restore selection also accept an empty cancellation. Invalid choices prompt again.
+- Enter `/cancel` in text, password or JSON forms, or press Ctrl+C, to cancel. End of input (EOF) also cancels. Empty input preserves the displayed default: backup cleanup keeps five by default; `0` cancels.
+- Enter `no` or empty input at yes/no confirmation, or decline the explicit delete/rotate confirmation word, to cancel. Cancellation returns directly to the main menu without another `0` and is audited as `cancelled`. Normal CLI cancellation returns 0, Ctrl+C remains 130, and actual failures remain nonzero.
+- Result pages remain visible; `0`, `/cancel` or Ctrl+C returns. Ctrl+C at the main prompt performs no operation; `0` exits. Menu 30 exits only after successfully installing/restoring the manager; failures retain their result page.
+- A draft saved before final apply confirmation remains available in menu 22. Unsaved form edits are discarded; an already completed backup, staged download or independent module creation is not undone by a later cancellation.
+- BBR module loading, configuration and parameter changes happen only after consent; BBR is still host-wide. Service start/stop/restart, immediate backup and shortcut installation remain immediate operations. Interrupting an active transaction retains rollback behavior; rollback failure remains an error with its recovery marker preserved.

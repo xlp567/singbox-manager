@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.6.5 - transactional core and independent protocol adapters
+# singbox-manager v3.6.6 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.6.5
+SBM_VERSION=3.6.6
 SHORTCUT=/usr/local/bin/sbm
 # Used by service.sh bundled below; tests redirect them.
 # shellcheck disable=SC2034
@@ -39,20 +39,34 @@ menu_clear() {
         printf '\033[2J\033[H'
     fi
 }
+cancel_action() {
+    say '已取消，未提交本次变更。'
+    exit 78
+}
+read_field() {
+    local destination=$1 prompt=$2 field_value
+    read -r -p "$prompt" field_value || cancel_action
+    [[ ! $field_value =~ ^[[:space:]]*/cancel[[:space:]]*$ ]] || cancel_action
+    printf -v "$destination" '%s' "$field_value"
+}
 menu_wait_return() {
-    local answer
+    local return_answer result=0
+    # Handle interruption in the reading shell, including a prior main-menu INT.
+    trap 'trap "MENU_INTERRUPTED=1" INT; return 0' INT
     say ''
     say '0  返回主菜单'
     while true; do
-        read -r -p '请输入 0 返回: ' answer || return 1
-        [[ $answer != 0 ]] || return 0
+        if ! read -r -p '请输入 0 返回: ' return_answer; then result=1; break; fi
+        [[ $return_answer != 0 && $return_answer != /cancel ]] || break
         say '当前为结果页，请输入 0 返回主菜单。'
     done
+    trap 'MENU_INTERRUPTED=1' INT
+    return "$result"
 }
 menu_read_choice() {
     local destination=$1 prompt=$2 pattern=$3 default=${4:-} answer
     while true; do
-        read -r -p "$prompt" answer || return 1
+        read_field answer "$prompt"
         answer=${answer:-$default}
         if [[ $answer =~ $pattern ]]; then
             printf -v "$destination" '%s' "$answer"
@@ -68,10 +82,12 @@ menu_back() {
 confirm() {
     local answer
     while true; do
-        read -r -p "$*（输入 yes 确认 / no 取消，不区分大小写）: " answer || return 1
+        if ! read -r -p "$*（输入 yes 确认 / no 取消，不区分大小写）: " answer; then
+            MENU_CANCELLED=1; say '输入结束，已取消。'; return 1
+        fi
         case $answer in
             [Yy]|[Yy][Ee][Ss]) return 0;;
-            ''|[Nn]|[Nn][Oo]) say '已取消，未提交本次变更。'; return 1;;
+            ''|/cancel|[Nn]|[Nn][Oo]) MENU_CANCELLED=1; say '已取消，未提交本次变更。'; return 1;;
             *) say '无法识别，请输入 yes 或 no。';;
         esac
     done
@@ -107,12 +123,12 @@ security_action() {
                 operation=allow;mode=management
                 read -r _ _ default_ip default_port _ <<<"${SSH_CONNECTION:-}"
                 [[ $kind == ssh ]] || default_port=''
-                read -r -p "本机网卡公网 IP${default_ip:+ [$default_ip]}: " address || return 0
-                address=${address:-$default_ip}; [[ -n $address ]] || return 0
-                read -r -p "服务 TCP 端口${default_port:+ [$default_port]}: " port || return 0
-                port=${port:-$default_port}; [[ -n $port ]] || return 0
+                read_field address "本机网卡公网 IP${default_ip:+ [$default_ip]}（/cancel 取消）: "
+                address=${address:-$default_ip}; [[ -n $address ]] || cancel_action
+                read_field port "服务 TCP 端口${default_port:+ [$default_port]}（/cancel 取消）: "
+                port=${port:-$default_port}; [[ -n $port ]] || cancel_action
                 if [[ $kind == panel ]]; then
-                    read -r -p '面板完整域名（HTTPS 可填写；直接用 IP 则留空）: ' domain || return 0
+                    read_field domain '面板完整域名（HTTPS 可填写；直接用 IP 则留空；/cancel 取消）: '
                 fi
                 ;;
             4|5|6)
@@ -304,7 +320,7 @@ resume_draft() {
     mode=$(engine get "$STATE/draft.json" mode)
     engine list "$TMP/model.json"
     local more
-    read -r -p '提交前先往草稿里补加节点吗？y/N: ' more || more=''
+    read_field more '提交前先往草稿里补加节点吗？y/N（/cancel 取消）: '
     confirm '继续处理以上已保存草稿（当前文件未发生变化）' || return 0
     stage_version
     base_install
@@ -344,8 +360,8 @@ draft_action() {
 }
 permanent_delete_confirm() {
     local answer
-    read -r -p '此操作无法从草稿归档恢复；输入 DELETE 永久删除，其他输入取消: ' answer || return 1
-    [[ $answer == DELETE ]] || { say '已取消永久删除。'; return 1; }
+    read_field answer '此操作无法从草稿归档恢复；输入 DELETE 永久删除，其他输入取消: '
+    [[ $answer == DELETE ]] || { MENU_CANCELLED=1; say '已取消永久删除。'; return 1; }
 }
 draft_purge_action() {
     [[ -f $STATE/draft.json ]] || { say '没有未提交草稿。'; return 0; }
@@ -386,9 +402,9 @@ protocol_action() {
     menu_read_choice choice '模块操作: ' '^[0-6]$' || return 0
     case $choice in
         1) engine official create "$(active_binary)";;
-        2) read -r -p '协议模板 JSON 路径: ' path; engine profile import "$path" "$(active_binary)";;
-        3) read -r -p '模块标识（例如 custom-newproto，all 检查全部）: ' kind; engine module-test "$(active_binary)" "$kind";;
-        4) read -r -p '待移除模块标识: ' kind; engine profile delete "$kind" "$CONF" "$STATE";;
+        2) read_field path '协议模板 JSON 路径（空行或 /cancel 取消）: '; [[ -n $path ]] || cancel_action; engine profile import "$path" "$(active_binary)";;
+        3) read_field kind '模块标识（all 检查全部；空行或 /cancel 取消）: '; [[ -n $kind ]] || cancel_action; engine module-test "$(active_binary)" "$kind";;
+        4) read_field kind '待移除模块标识（空行或 /cancel 取消）: '; [[ -n $kind ]] || cancel_action; engine profile delete "$kind" "$CONF" "$STATE";;
         5) engine profile create "$(active_binary)";;
         6) engine official list "$(active_binary)";;
         0) menu_back; return 0;;
@@ -429,9 +445,13 @@ restore_action() {
     for d in "$BACKUPS"/*; do [[ ! -f $d/.complete || ! -f $d/config-dir/config.json ]] || dirs+=("$d"); done
     (( ${#dirs[@]} )) || die '没有可恢复的配置快照。'
     for n in "${!dirs[@]}"; do say "$((n+1))) ${dirs[n]##*/}"; done
-    read -r -p '恢复序号: ' n
-    [[ $n =~ ^[1-9][0-9]{0,5}$ ]] || die '无效序号。'
-    (( n<=${#dirs[@]} )) || die '无效序号。'
+    say '0  返回（空行或 /cancel 也取消）'
+    while true; do
+        read_field n '恢复序号: '
+        [[ -n $n && $n != 0 ]] || cancel_action
+        if [[ $n =~ ^[1-9][0-9]{0,5}$ ]] && (( n<=${#dirs[@]} )); then break; fi
+        say '无效序号，请重新输入。'
+    done
     chosen=${dirs[n-1]}
     checker=$chosen/runtime.bin
     engine backup-verify "$chosen"
@@ -492,9 +512,13 @@ prune_action() {
     [[ ! -f $STATE/pending ]] || pending=$(cat "$STATE/pending")
     say '当前占用：'
     du -sh "$BACKUPS" "$RUNTIME/releases" 2>/dev/null || true
-    read -r -p '保留最近几份备份 [5]: ' keep
-    keep=${keep:-5}
-    [[ $keep =~ ^[1-9][0-9]{0,2}$ ]] || die '保留份数需为 1–999。'
+    while true; do
+        read_field keep '保留最近几份备份 [5]（0 或 /cancel 返回）: '
+        keep=${keep:-5}
+        [[ $keep != 0 ]] || cancel_action
+        [[ $keep =~ ^[1-9][0-9]{0,2}$ ]] && break
+        say '保留份数需为 1–999，请重新输入。'
+    done
     mapfile -t all < <(find "$BACKUPS" -mindepth 1 -maxdepth 1 -type d -name '20*' | sort -r)
     for d in "${all[@]}"; do
         n=$((n+1))
@@ -586,7 +610,7 @@ action() (
     set -Eeuo pipefail
     # Consumed by cleanup() in the bundled transactions.sh module.
     # shellcheck disable=SC2034
-    MENU_RETURN_REQUESTED=0
+    MENU_RETURN_REQUESTED=0 MENU_CANCELLED=0 MENU_RELOAD=0
     trap cleanup EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
@@ -625,7 +649,7 @@ action() (
         29|paths) paths_action "${2:-}";;
         30) manager_update_action;;
         31) security_action;;
-        audit-repair) confirm '保留损坏审计原件，开新链并记录旧链最后有效哈希（不改服务）' && engine audit-repair "$STATE/audit.jsonl";;
+        audit-repair) confirm '保留损坏审计原件，开新链并记录旧链最后有效哈希（不改服务）' || return 0; engine audit-repair "$STATE/audit.jsonl";;
         security) shift; security_action "$@";;
         self-update) manager_update_action "${2:-menu}" "${3:-}";;
         protocols) if [[ ${2:-} == --json ]]; then engine protocols --json; else engine protocols --text; fi;;
@@ -658,7 +682,7 @@ resolve_action() {
     esac
 }
 main() {
-    local resolved MENU_ACTIVE=0
+    local resolved MENU_ACTIVE=0 MENU_INTERRUPTED=0
     if [[ ${1:-} == audit && ${2:-} == repair ]]; then
         (( $#==2 )) || die '审计修复不支持额外参数。'
         require_host cli
@@ -780,7 +804,7 @@ main() {
     # Consumed by cleanup() in the bundled transactions.sh module.
     # shellcheck disable=SC2034
     MENU_ACTIVE=1
-    trap ':' INT
+    trap 'MENU_INTERRUPTED=1' INT
     local n rc
     while true; do
         say ''
@@ -816,8 +840,13 @@ main() {
 0  退出
 MENU
         say '扩展命令：protocols / compat / validate / module-test / runtime / audit（菜单序号保持不变）'
+        say '返回：选择页输入 0；表单输入 /cancel 或 Ctrl+C 取消；空行保留提示中的默认值。'
         while true; do
-            read -r -p '请选择: ' n || return 0
+            MENU_INTERRUPTED=0
+            if ! read -r -p '请选择: ' n; then
+                [[ $MENU_INTERRUPTED == 1 ]] && continue
+                return 0
+            fi
             [[ $n =~ ^([0-9]|[12][0-9]|3[01])$ ]] && break
             say '无效选择，请输入 0–31。'
         done
@@ -827,7 +856,7 @@ MENU
         rc=$?
         # cleanup emits 77 only for an explicit, successful submenu return.
         if (( rc==77 )); then menu_clear; continue; fi
-        if [[ $n == 30 || $rc == 76 ]]; then return 0; fi
+        if (( rc==76 )); then return 0; fi
         if (( rc!=0 && rc!=130 )); then say "操作未完成（退出码 ${rc}）；请查看上方原因。"; fi
         # Ctrl+C already explicitly requests a return (notably for live logs).
         if (( rc!=130 )); then menu_wait_return || return 0; fi

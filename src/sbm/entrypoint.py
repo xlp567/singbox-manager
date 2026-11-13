@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 from .core import storage,audit
+from .core.interaction import Cancelled
 from .runtime import Runtime
 
 
@@ -84,7 +85,9 @@ def main():
 
 def run():
     try:main()
-    except (ValueError,KeyError,TypeError,AttributeError,IndexError,OSError,EOFError,subprocess.SubprocessError) as error:
+    except (Cancelled, EOFError):
+        print('已取消，未提交的编辑已丢弃。',file=sys.stderr);sys.exit(78)
+    except (ValueError,KeyError,TypeError,AttributeError,IndexError,OSError,subprocess.SubprocessError) as error:
         print('错误：'+str(error),file=sys.stderr);sys.exit(1)
     except KeyboardInterrupt:
         print('\n已取消，未提交的编辑已丢弃。',file=sys.stderr);sys.exit(130)
