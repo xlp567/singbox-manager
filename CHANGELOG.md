@@ -1,5 +1,10 @@
 # Changelog / 更新记录
 
+## 3.6.4 — 2026-11-13
+
+- 交互菜单操作后停留在结果页，输入 `0` 返回主菜单；无效输入只重试提示，不再重打整张菜单。终端切页只清理当前画面，保留终端滚动历史。直接 CLI 命令保持输出后退出；实时日志 `Ctrl+C` 与管理器升级的退出行为保持不变。
+- Interactive actions keep their result visible until `0` returns to the main menu. Invalid input repeats only the prompt. Terminal page changes preserve scrollback; direct CLI commands, live-log interruption and manager-update exit behavior are unchanged.
+
 ## 3.6.3 — 2026-11-12
 
 - 修复出口保护的 UDP 缺口：sing-box 只按 UDP 会话的首个数据包匹配路由，旧规则下同一会话的后续数据包可到达回环、内网或本机地址的 UDP 端口。放行规则加入 `udp_connect`，每个会话只连接首包通过检查的目的地；TCP 拦截不变。

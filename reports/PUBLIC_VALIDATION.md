@@ -2,6 +2,16 @@
 
 原始日志、真实地址、SSH 端口、主机名、节点域名、登录资料及备份位置仅保存在私有目录；以下只发布能力与结果。
 
+## v3.6.4 — 2026-11-13
+
+- macOS 和授权练手 Debian 各通过 **370/370** 自动化测试、Bash 语法、ShellCheck 与脚本 SHA-256 校验。新增 9 项菜单用例覆盖结果等待 `0`、结果页不派发其他菜单编号、无效选择不重画、失败信息停留、EOF、直接 CLI、日志中断和升级/恢复退出。Debian 首轮有两项因缺少 Git 报错；仅在私有测试目录解包 Git / ShellCheck 后，重跑完整套件通过，未安装系统软件。
+- 在真实终端连续 **3 轮**检查菜单 2、9、12、14、26、29，共 **18 次**结果页停留、错误输入及 `0` 返回；核对可见画面清理序列且不清除滚动历史。另通过 **8 个 CLI** 不等待输入检查，以及实时日志 Ctrl+C、取消升级、结果页 EOF 三种真实终端退出路径。
+- 练手机从管理器 v3.6.3 更新到 **v3.6.4**，安装前由已有管理器验证固定公钥签名、版本及摘要。完整备份在远端和本地均已核对。既有 AnyTLS、Hysteria2 节点升级前后各通过 3 次外部 HTTPS 请求，共 **12 次**。
+- 配置、节点凭据、sing-box Runtime、sing-box / 3X-UI / Xray 原进程与受保护文件保持一致，无待恢复标记；未应用出口策略、重启代理服务或更改系统网络参数。测试只覆盖此次菜单变更及上述场景，不增加其他协议 / UDP 行为的实机覆盖承诺。
+- 当前发布白名单及解码引擎严格隐私检查通过；公开历史及旧 Release 下载复核中的 6 条旧作者邮箱域名提示已逐项人工核对，无未处理发现。重复构建一致；最终签名附件、标签、默认分支和匿名读回结果在本版 Release 正文单独记录。私有连接资料、完整备份及原始日志未纳入发布。
+
+Both macOS and the authorized Debian practice host passed **370/370** tests, Bash syntax, ShellCheck and distribution checksums. The initial Debian run had two errors because Git was absent; Git and ShellCheck were unpacked only into the private test directory, and the full suite then passed without installing system packages. Real-terminal acceptance completed **3 rounds / 18 result pages**, **8 nonwaiting CLI checks**, and live-log interruption, cancelled-update and EOF exits. The practice host was updated from v3.6.3 to **v3.6.4** through its installed manager after signature/version/hash validation and a complete backup verified remotely and locally. Both existing AnyTLS and Hysteria2 nodes passed three external HTTPS requests before and after (**12 total**). Configuration, credentials, runtime bytes, original sing-box / 3X-UI / Xray processes and protected files remained unchanged; there was no policy application, proxy restart or pending recovery. This does not extend live coverage to other protocols or UDP behavior. Strict current-source privacy checks and reproducible builds passed; six historical author-email provider warnings were individually reviewed, leaving no unresolved findings. Raw records remain private. Publication and anonymous download verification are recorded separately in the Release notes.
+
 | 版本 / Version | 验证范围 / Validation | 结果 / Result |
 |---|---|---|
 | 3.5.1 | macOS / Debian；九协议、草稿、管理器升级 | 当时各 144 项通过，授权练手验收通过 |
@@ -17,6 +27,7 @@
 | 3.6.1 | 审计轮转互斥、保留边界、BBR 失败恢复记录、仅公网单播 | macOS 338 项通过；本次未连接或部署 VPS |
 | 3.6.2 | 本机 SSH、3X-UI 面板管理例外 | 本地 347 项；1.14.4 隔离连通 39 项通过；未部署 |
 | 3.6.3 | 出口保护 UDP 会话绑定、旧规则识别与刷新 | 本地 361 项；1.14.3 / 1.14.4 隔离连通各 43 项通过；未部署 |
+| 3.6.4 | 菜单结果页停留、输入重试、CLI 保持直接退出 | macOS / Debian 各 370 项；实机 3 轮菜单及既有节点连接通过；已部署练手机 |
 
 ## v3.6.3 — 2026-11-12
 

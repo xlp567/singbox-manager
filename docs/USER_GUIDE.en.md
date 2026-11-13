@@ -34,6 +34,8 @@ For ACME, point the domain's A/AAAA records to the server and disable incompatib
 
 ## 3. Daily node management
 
+Interactive results (node lists, client exports, diagnostics and other actions) remain visible until you enter **0** to return to the main menu. Enter **0** at the main menu to exit. Other input on a result page cannot launch an action. Live logs still return with **Ctrl+C**. Direct commands such as `sbm list` print their output and exit without waiting.
+
 Use **2** to list nodes, **3** to add, **4** to edit, **5** to enable/disable, **6** to remove, and **7** to rotate credentials. Use **9** to export client configurations and QR codes, then import a compatible format into your client and perform an actual connection test.
 
 Edits are staged as drafts. Official sing-box checks the compiled configuration before applying it. A running service does not prove public connectivity: verify DNS, certificates, cloud/host firewalls, protocol support and the network path.

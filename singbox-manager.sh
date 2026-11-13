@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.6.3 - transactional core and independent protocol adapters
+# singbox-manager v3.6.4 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.6.3
+SBM_VERSION=3.6.4
 SHORTCUT=/usr/local/bin/sbm
 # Used by service.sh bundled below; tests redirect them.
 # shellcheck disable=SC2034
@@ -521,6 +521,22 @@ manager_update_action() {
 
 say() { printf '%s\n' "$*"; }
 die() { say "错误：$*" >&2; exit 1; }
+menu_clear() {
+    # Clear the visible page only; keep terminal scrollback for earlier output.
+    if [[ -t 1 && -n ${TERM:-} && ${TERM:-} != dumb ]]; then
+        printf '\033[2J\033[H'
+    fi
+}
+menu_wait_return() {
+    local answer
+    say ''
+    say '0  返回主菜单'
+    while true; do
+        read -r -p '请输入 0 返回: ' answer || return 1
+        [[ $answer != 0 ]] || return 0
+        say '当前为结果页，请输入 0 返回主菜单。'
+    done
+}
 confirm() {
     local answer
     while true; do
@@ -1266,12 +1282,20 @@ main() {
 0  退出
 MENU
         say '扩展命令：protocols / compat / validate / module-test / runtime / audit（菜单序号保持不变）'
-        read -r -p '请选择: ' n || break
+        while true; do
+            read -r -p '请选择: ' n || return 0
+            [[ $n =~ ^([0-9]|[12][0-9]|3[01])$ ]] && break
+            say '无效选择，请输入 0–31。'
+        done
         [[ $n != 0 ]] || break
+        menu_clear
         action "$n"
         rc=$?
         if [[ $n == 30 || $rc == 76 ]]; then return 0; fi
         if (( rc!=0 && rc!=130 )); then say "操作未完成（退出码 ${rc}）；请查看上方原因。"; fi
+        # Ctrl+C already explicitly requests a return (notably for live logs).
+        if (( rc!=130 )); then menu_wait_return || return 0; fi
+        menu_clear
     done
 }
 emit_engine() {
