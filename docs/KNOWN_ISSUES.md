@@ -1,6 +1,6 @@
 # 已知问题与限制 / Known issues and limits
 
-核对版本：v3.6.6。此清单区分未修复行为、待复现疑点与使用限制；测试通过不代表问题清零。公开记录不包含测试环境标识。
+核对版本：v3.6.7。此清单区分未修复行为、待复现疑点与使用限制；测试通过不代表问题清零。公开记录不包含测试环境标识。
 
 | 状态 | 未完成项及影响 |
 |---|---|
@@ -13,6 +13,8 @@
 | 使用限制 | 公网检测源全部不可达且网卡无公网地址时，需要管理员用 `sbm security public-ip add` 确认地址；确认列表只用于节点地址核对。 |
 | 使用限制 | v3.6.3 起每个 UDP 会话只能发往首包通过检查的一个目的地，依赖全锥形 NAT 的应用可能无法连接。已应用旧规则的服务器须执行 **31 → 1** 才获得该修复。该修复经 SOCKS 与 Shadowsocks 入站实测；Hysteria2、TUIC 及 TLS 协议的 UDP 使用同一条路由规则，尚未逐一实测。 |
 | 工具边界 | 隐私规则不能识别任意未知账号、少见域名或内部名称；正式发布必须结合非空私有精确匹配清单与人工复核。完整历史 / Release 下载审计尚未接入自动 CI。 |
+
+v3.6.7 修复了一键入口和独立安装器在真实终端确认时的 `File or stream is not seekable`；签名验证与安装确认仍然保留。此次新增安装验证使用 Debian 练手机上的独立挂载命名空间，未连接报告问题的新 Ubuntu 主机，不能等同于该主机已安装验收。
 
 本机公网地址快照只在应用配置时刷新；地址改变后需要重新应用。私网 / 回环 / 链路本地拒绝仍有效。当前策略拒绝 NAT64、6to4、Teredo 等转换前缀，相关网络可能受影响。
 
@@ -37,3 +39,5 @@ v3.6.0 restores recorded BBR settings, pins the APT key fingerprint, rotates the
 v3.6.6 修复菜单取消/返回的六类问题；选择页 0、表单 /cancel 和输入结束不再误报操作失败。BBR 确认前不加载模块。未穷举每种协议的全部字段；运行时、网络或内核限制并未因此消失。
 
 v3.6.6 fixes the six cancellation/navigation issue categories and defers BBR module loading until consent. Tests do not exhaust every protocol field or remove runtime, network or kernel limitations.
+
+v3.6.7 fixes `File or stream is not seekable` at real-terminal confirmation in both installation entries, preserving signature checks and consent. New installation validation uses a private mount namespace on the authorized Debian practice host. The newly reported Ubuntu host was not contacted or validated.

@@ -2,6 +2,18 @@
 
 原始日志、真实地址、SSH 端口、主机名、节点域名、登录资料及备份位置仅保存在私有目录；以下只发布能力与结果。
 
+## v3.6.7 — 2026-11-13
+
+- 修复公开一行安装入口及独立 Python 安装器用读写缓冲方式打开 `/dev/tty` 引发的 `File or stream is not seekable`。终端读写改为独立流；固定公钥验签、正式 Release 限制及执行前确认保持不变。
+- macOS 与练手 Debian 各 **410/410** 项测试通过，含新增 **10 项真实终端回归**；Bash 语法、ShellCheck、分发摘要检查通过。新增测试不模拟 `/dev/tty`，覆盖旧错误复现、标准输入为管道、两个入口、确认前不执行、取消、空输入、EOF、Ctrl+C 和缺少控制终端时拒绝继续。
+- Linux 私有挂载命名空间中，原版 v3.6.6 一行命令真实复现错误且没有安装文件；修复后的 Bash 与 Python 两个入口均完成真实 GitHub 下载、固定公钥验签、确认、安装与打开菜单后退出。发布前这两次下载的是当时最新稳定版 v3.6.6；候选入口在执行前单独以既有固定公钥验签。最终公开 v3.6.7 一行命令的发布后验收另记于 Release 正文。
+- 首次安装测试将管理器、配置、状态、运行程序和数据路径绑定到临时空目录；既有节点不参与安装。完整备份已在远端与本地校验；练手机现有管理器保留 v3.6.6，节点配置、凭据、Runtime、原 sing-box / 3X-UI / Xray 进程、受保护文件和网络参数保持一致。没有连接报告问题的新 Ubuntu 主机，不将 Debian 隔离验证称作该 Ubuntu 主机验收。
+- 当前源码及解码引擎严格隐私检查通过；历史与旧 Release 中 6 条已知作者邮箱提供商域名提示逐项人工复核，无未处理发现。原始记录和备份仅保存在私有目录。
+
+Both macOS and the authorized Debian practice host passed **410/410** tests, Bash syntax, ShellCheck and distribution checksums. **10 new real-terminal regressions** reproduce the old failure and cover piped standard input, both entry points, consent before execution, cancellation, empty input, EOF, Ctrl+C and absence of a controlling terminal. The tty itself is never mocked.
+
+A private Linux mount namespace reproduced the original v3.6.6 one-line failure without installed files. Both corrected entry points then completed actual GitHub downloads, pinned-key verification, confirmation, installation and menu entry/exit. Before publication these fetched the then-current stable v3.6.6; candidate entry files were independently signature-verified before execution. Post-publication checks of the final v3.6.7 one-line command are recorded in the Release notes. Installation paths were bound to empty temporary directories, preserving the existing v3.6.6 manager, node/configuration/credential/runtime bytes, original sing-box / 3X-UI / Xray processes, protected files and network settings. Complete backups were verified on both sides. The newly reported Ubuntu host was not contacted. Strict source privacy checks passed; six historical email-provider metadata warnings were reviewed, with no unresolved findings. Raw evidence remains private.
+
 ## v3.6.6 — 2026-11-13
 
 - 六类导航问题已修复：菜单 30 仅成功安装才退出；取消删除/重置不报失败；选择页支持 0 返回和无效重输；确认取消不再二次等待；BBR 确认后才加载模块；EOF 作为取消处理。普通表单支持 /cancel，数值 0 和空默认值保持各自语义。

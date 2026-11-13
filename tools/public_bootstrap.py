@@ -37,9 +37,10 @@ def read(path,token=''):
 def consent(tag):
     print('正式 Release '+tag+' 的安装器签名已通过固定公钥验证。')
     print('将安装管理器并打开菜单；不创建节点，不重启已有代理服务。')
-    with open('/dev/tty','r+') as terminal:
-        terminal.write('输入 yes 安装并运行已验证的安装器，其他输入取消: ');terminal.flush()
-        return terminal.readline().strip().lower()=='yes'
+    # Separate streams: buffered r+ requires seeking, which a terminal cannot do.
+    with open('/dev/tty','r') as terminal_input, open('/dev/tty','w') as terminal_output:
+        terminal_output.write('输入 yes 安装并运行已验证的安装器，其他输入取消: ');terminal_output.flush()
+        return terminal_input.readline().strip().lower()=='yes'
 
 
 def launch(token=''):

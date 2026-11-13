@@ -341,8 +341,9 @@ def main(token=None,release=None,confirmed=False):
         print('安装 /root/singbox-manager.sh 和快捷命令 sbm，并保存此仓库的后续升级设置。')
         answer='yes' if confirmed else ''
         if not confirmed:
-            with open('/dev/tty','r+') as terminal:
-                terminal.write('输入 yes 安装，其他输入取消: ');terminal.flush();answer=terminal.readline().strip().lower()
+            # Separate streams: buffered r+ requires seeking, which a terminal cannot do.
+            with open('/dev/tty','r') as terminal_input, open('/dev/tty','w') as terminal_output:
+                terminal_output.write('输入 yes 安装，其他输入取消: ');terminal_output.flush();answer=terminal_input.readline().strip().lower()
         if answer!='yes':print('已取消安装。');return
         result=install(stage,token,info)
     print('安装完成：singbox-manager v'+result['version']+'。后续升级使用菜单 30 → 2。')

@@ -299,3 +299,7 @@ BBR recovery is tested using a sysctl double, not a live kernel. This version ha
 - Result pages remain visible; `0`, `/cancel` or Ctrl+C returns. Ctrl+C at the main prompt performs no operation; `0` exits. Menu 30 exits only after successfully installing/restoring the manager; failures retain their result page.
 - A draft saved before final apply confirmation remains available in menu 22. Unsaved form edits are discarded; an already completed backup, staged download or independent module creation is not undone by a later cancellation.
 - BBR module loading, configuration and parameter changes happen only after consent; BBR is still host-wide. Service start/stop/restart, immediate backup and shortcut installation remain immediate operations. Interrupting an active transaction retains rollback behavior; rollback failure remains an error with its recovery marker preserved.
+
+### v3.6.7 first-installation fix
+
+If the older entry reports `File or stream is not seekable` after signature verification and `sbm` is absent, installation has not reached its write stage. This was a terminal-opening bug; reinstalling the OS, installing similarly named commands or rebooting is unnecessary for this error. Rerun the documented one-line command to fetch the corrected release, then enter `yes` at confirmation. This installs only the manager, without creating nodes or restarting proxies.

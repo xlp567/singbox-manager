@@ -1,5 +1,13 @@
 # Changelog / 更新记录
 
+## 3.6.7 — 2026-11-13
+
+- 修复一键首次安装在签名通过后报 `File or stream is not seekable`：安装入口与独立安装器均改为分别读取和写入控制终端，不再以需要 seek 的 `r+` 模式打开 `/dev/tty`。
+- 保留固定公钥验签与先确认后执行；取消、空输入、EOF、Ctrl+C 均不会执行下载的安装器。已有管理器继续使用菜单 30。
+- 增加真实控制终端回归，覆盖 Python 标准输入为管道的启动方式、内嵌安装入口和独立安装器。安装仍不创建节点、不重启代理。
+
+Fix first installation failing with `File or stream is not seekable` after signature verification. Both the bootstrap and standalone installer now use separate read/write terminal streams instead of seek-dependent buffered `r+`. Pinned-key verification and consent-before-execution remain mandatory. Add real controlling-terminal regressions for piped Python stdin, the bundled loader, direct installation and cancellation. Existing managers continue to use menu 30; first installation does not create nodes or restart proxies.
+
 ## 3.6.6 — 2026-11-13
 
 - 统一选择页 0、表单 /cancel、确认取消与 EOF；正常取消不再报错或要求二次返回，草稿保留规则不变。
