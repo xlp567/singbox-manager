@@ -1,5 +1,12 @@
 # Changelog / 更新记录
 
+## v3.6.8
+
+菜单 19 输入 `v` 仅校验全部已完成备份。旧格式无摘要会单独标出。菜单 **30 → 5** 或 `sbm self-update check` 显示已签名的最新正式版和两个已安装副本的摘要。菜单 25 从对应版本的正式 Release 核验本机安装副本后修复快捷命令，需要联网。版本不一致请用菜单 30。SSH 上传升级由服务器上已安装的 sbm 验签和确认。 恢复前核对每条清单记录与目标文件的对应关系。
+
+Enter `v` in menu 19 to verify all completed backups. Legacy backups without hashes are reported separately. Menu **30 → 5** or `sbm self-update check` shows the signed stable release and both installed file digests. Menu 25 verifies the installed copy against its matching signed release online before repairing the shortcut. Use menu 30 for version changes. SSH uploads are verified and confirmed by the installed manager. Recovery validates both manifest rows in target order before writing.
+
+
 ## 3.6.7 — 2026-11-13
 
 - 修复一键首次安装在签名通过后报 `File or stream is not seekable`：安装入口与独立安装器均改为分别读取和写入控制终端，不再以需要 seek 的 `r+` 模式打开 `/dev/tty`。

@@ -303,3 +303,7 @@ BBR recovery is tested using a sysctl double, not a live kernel. This version ha
 ### v3.6.7 first-installation fix
 
 If the older entry reports `File or stream is not seekable` after signature verification and `sbm` is absent, installation has not reached its write stage. This was a terminal-opening bug; reinstalling the OS, installing similarly named commands or rebooting is unnecessary for this error. Rerun the documented one-line command to fetch the corrected release, then enter `yes` at confirmation. This installs only the manager, without creating nodes or restarting proxies.
+
+## v3.6.8
+
+Enter `v` in menu 19 to verify all completed backups. Legacy backups without hashes are reported separately. Menu **30 → 5** or `sbm self-update check` shows the signed stable release and both installed file digests. Menu 25 verifies the installed copy against its matching signed release online before repairing the shortcut. Use menu 30 for version changes. SSH uploads are verified and confirmed by the installed manager.

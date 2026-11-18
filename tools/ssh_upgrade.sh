@@ -28,7 +28,10 @@ cleanup_upload() {
 }
 trap cleanup_upload EXIT
 printf '目标：%s，SSH 端口 %s\n本地脚本 SHA-256：%s\n' "$target" "$port" "$expected"
-ssh "${options[@]}" -n -p "$port" "$target" 'test "$(id -u)" = 0 && test "$(uname -s)" = Linux && test -d /root'
+ssh "${options[@]}" -n -p "$port" "$target" 'test "$(id -u)" = 0 && test "$(uname -s)" = Linux && test -x /usr/local/bin/sbm && test ! -L /usr/local/bin/sbm' || {
+    printf '%s\n' '需要已安装的 sbm；新服务器请使用正式 Release 的安装入口。' >&2
+    exit 1
+}
 nonce=$(python3 -c 'import secrets;print(secrets.token_hex(8))')
 candidate=/root/singbox-manager-upload-$nonce.sh
 checksum=/root/singbox-manager-upload-$nonce.sha256
@@ -48,7 +51,7 @@ scp "${options[@]}" -P "$port" "$PROJECT/singbox-manager.sha256" "$target:$check
 scp "${options[@]}" -P "$port" "$release/SHA256SUMS" "$target:$manifest"
 scp "${options[@]}" -P "$port" "$release/SHA256SUMS.sig" "$target:$signature"
 # Nonce is generated locally and consists only of hexadecimal characters.
-ssh "${options[@]}" -tt -p "$port" "$target" "bash $candidate self-update local $candidate"
+ssh "${options[@]}" -tt -p "$port" "$target" "/usr/local/bin/sbm self-update local $candidate"
 actual=$(ssh "${options[@]}" -n -p "$port" "$target" 'sha256sum /usr/local/bin/sbm' | awk '{print $1}')
 [[ $actual == "$expected" ]] || { printf '%s\n' '未安装所上传版本（可能已取消）；保留候选文件供核查。' >&2; exit 1; }
 ssh "${options[@]}" -n -p "$port" "$target" "rm -f -- $candidate $checksum $manifest $signature"

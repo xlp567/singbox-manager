@@ -2,6 +2,12 @@
 
 原始日志、真实地址、SSH 端口、主机名、节点域名、登录资料及备份位置仅保存在私有目录；以下只发布能力与结果。
 
+## v3.6.8 — 2026-11-18
+
+macOS 与练手 Debian 各通过 418 项测试，含 8 项新回归；Bash 语法、ShellCheck、分发摘要通过。完整备份在远端与本地校验。隔离安装、备份校验分支、签名更新检查、同版本快捷命令修复通过，隔离前后已有节点 HTTPS 请求 12/12 成功，原服务进程和受保护文件一致。正式部署与匿名读回另见本版 Release 正文。
+
+Both macOS and Debian passed all 418 tests, including eight new regressions, syntax, ShellCheck and checksums. The complete backup was checked on both sides. Isolated installation, backup verification, signed update inspection and shortcut repair passed. Existing nodes completed all 12 HTTPS requests before and after isolation. Protected processes and files matched the baseline. Publication and deployment results are recorded in the Release notes.
+
 ## v3.6.7 — 2026-11-13
 
 - 修复公开一行安装入口及独立 Python 安装器用读写缓冲方式打开 `/dev/tty` 引发的 `File or stream is not seekable`。终端读写改为独立流；固定公钥验签、正式 Release 限制及执行前确认保持不变。

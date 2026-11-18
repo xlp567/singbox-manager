@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.6.7 - transactional core and independent protocol adapters
+# singbox-manager v3.6.8 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.6.7
+SBM_VERSION=3.6.8
 SHORTCUT=/usr/local/bin/sbm
 # Used by service.sh bundled below; tests redirect them.
 # shellcheck disable=SC2034
@@ -440,14 +440,33 @@ change_version() {
     [[ -n $CANDIDATE ]] || return 0
     apply_draft "$CANDIDATE"
 }
+verify_snapshots() {
+    local dir count=0 failed=0
+    for dir in "$BACKUPS"/*; do
+        [[ -d $dir && ! -L $dir && -f $dir/.complete ]] || continue
+        count=$((count+1))
+        if [[ -L $dir/.complete || -L $dir/manifest.json ]]; then
+            say "${dir##*/}：备份标记或清单异常"; failed=1
+        elif [[ ! -e $dir/manifest.json && ! -s $dir/.complete ]]; then
+            say "${dir##*/}：旧格式无摘要，无法验证完整性"
+        elif [[ -f $dir/manifest.json ]] && engine backup-verify "$dir"; then
+            say "${dir##*/}：文件清单与摘要一致"
+        else
+            say "${dir##*/}：校验失败"; failed=1
+        fi
+    done
+    (( count > 0 )) || say '没有已完成的快照。'
+    return "$failed"
+}
 restore_action() {
     local dirs=() d n chosen checker
     for d in "$BACKUPS"/*; do [[ ! -f $d/.complete || ! -f $d/config-dir/config.json ]] || dirs+=("$d"); done
-    (( ${#dirs[@]} )) || die '没有可恢复的配置快照。'
+    say 'v  仅校验备份（检查全部已完成快照）' 
     for n in "${!dirs[@]}"; do say "$((n+1))) ${dirs[n]##*/}"; done
     say '0  返回（空行或 /cancel 也取消）'
     while true; do
-        read_field n '恢复序号: '
+        read_field n '恢复序号（v 仅校验）: '
+        if [[ $n == v || $n == V ]]; then verify_snapshots; return; fi
         [[ -n $n && $n != 0 ]] || cancel_action
         if [[ $n =~ ^[1-9][0-9]{0,5}$ ]] && (( n<=${#dirs[@]} )); then break; fi
         say '无效序号，请重新输入。'
@@ -546,15 +565,7 @@ prune_action() {
     df -h "$STATE" | awk 'NR==2 {print "剩余空间：" $4}'
 }
 install_shortcut() {
-    local self
-    self=$(readlink -f "${BASH_SOURCE[0]}")
-    [[ -f $self ]] || die '无法定位脚本文件；请先把脚本保存到磁盘再执行。'
-    if [[ $self == "$SHORTCUT" ]]; then say '当前运行的就是快捷命令本身；用新版脚本执行本项即可更新。'; return 0; fi
-    if [[ -e $SHORTCUT ]] && ! grep -q '^# singbox-manager v' "$SHORTCUT"; then
-        die "$SHORTCUT 已存在且不是本脚本，未覆盖。"
-    fi
-    install -m 700 "$self" "$SHORTCUT"
-    say "已安装：之后可直接运行 sudo sbm 打开菜单，或 sudo sbm help 查看命令。上传新版脚本后再执行一次本项即可同步。"
+    engine manager-update shortcut "$STATE" "$TMP" "$SBM_VERSION" /root "$SHORTCUT"
 }
 status_line() {
     local state ver='' nodes='-' b extra=''
@@ -588,7 +599,7 @@ singbox-manager v$SBM_VERSION
   draft       草稿菜单；list / resume / discard（归档）/ purge（永久删除当前草稿）
               purge-archives（永久清空已归档草稿）
   paths       显示运行文件、配置、草稿、备份、证书和日志位置，可加 --json
-  self-update 管理脚本升级菜单；local [/root/脚本.sh] / github / rollback / configure
+  self-update 管理脚本升级菜单；local [/root/脚本.sh] / github / check / rollback / configure
   service     服务操作：status / start / stop / restart
   protocols   列出协议模块与版本要求，可加 --json
   protocol    协议菜单；discover [--json] / create [协议名]（官方自动表单）
@@ -718,7 +729,7 @@ main() {
     if [[ ${1:-} == self-update ]]; then
         case ${2:-menu} in
             local) (( $#<=3 )) || die '本地脚本升级参数过多。';;
-            menu|github|rollback|configure) (( $#<=2 )) || die '脚本升级参数过多。';;
+            menu|github|rollback|configure|check) (( $#<=2 )) || die '脚本升级参数过多。';;
             *) die '脚本升级方式无效。';;
         esac
         require_host cli
@@ -826,12 +837,12 @@ main() {
 17 重启服务          20 修改日志等级
 ---------------------- 维护 ----------------------
 18 完整配置与运行版本备份
-19 恢复备份 / 回退版本
+19 恢复备份 / 回退版本 / 仅校验备份
 21 卸载（保留数据）
 22 草稿管理：继续 / 查看 / 归档 / 彻底删除
 23 先备份，再重新初始化（处理未完成安装/外部配置）
 24 清理旧备份 / 旧运行版本
-25 安装快捷命令 sbm
+25 校验 / 修复快捷命令 sbm
 26 服务器概况        27 开启 / 关闭 BBR
 28 官方协议自动发现 / 参数表单 / 模块管理
 29 文件目录：运行程序 / 配置 / 草稿 / 备份 / 日志

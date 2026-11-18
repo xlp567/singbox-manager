@@ -73,19 +73,27 @@ def backup_root(state):
     p.mkdir(parents=True,exist_ok=True);os.chmod(p,0o700);return p
 
 
+def manifest_rows(manifest):
+    rows = manifest.get('files')
+    if not isinstance(rows, list) or len(rows) != 2:
+        raise ValueError('脚本备份清单损坏')
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or row.get('file') != f'{index}.sh' or type(row.get('exists')) is not bool:
+            raise ValueError('脚本备份记录与恢复目标不匹配')
+    return rows
+
+
 def restore(state,backup,root,shortcut):
     base=backup_root(state);p=pathlib.Path(backup)
     if p.is_symlink() or p.parent.resolve()!=base.resolve():raise ValueError('脚本备份路径异常')
     m=json.loads(regular(p/'manifest.json').read_text())
     if m.get('targets')!=targets(root,shortcut):raise ValueError('备份目标与本机不匹配')
-    rows=m['files']
-    if not isinstance(rows,list) or len(rows)!=2:raise ValueError('脚本备份清单损坏')
+    rows=manifest_rows(m)
     for row in rows:
-        if row.get('file') not in {'0.sh','1.sh'}:raise ValueError('脚本备份文件名无效')
         if row['exists'] and file_digest(regular(p/row['file']))!=row['sha256']:raise ValueError('旧脚本备份摘要不符，保留恢复标记')
     side=m.get('sidecar')
     if side is not None:
-        if not isinstance(side,dict) or side.get('file')!='sidecar.sha256':raise ValueError('校验文件备份清单损坏')
+        if not isinstance(side,dict) or side.get('file')!='sidecar.sha256' or type(side.get('exists')) is not bool:raise ValueError('校验文件备份清单损坏')
         if side['exists'] and file_digest(regular(p/side['file']))!=side['sha256']:raise ValueError('旧校验文件备份摘要不符，保留恢复标记')
     for target,row in zip(m['targets'],rows):
         if row['exists']:atomic_bytes(target,(p/row['file']).read_bytes())
@@ -198,8 +206,7 @@ def rollback_stage(state,backup,root,shortcut,destination):
     if p.is_symlink() or p.parent.resolve()!=backup_root(state).resolve():raise ValueError('脚本备份路径异常')
     m=json.loads(regular(p/'manifest.json').read_text())
     if m.get('targets')!=targets(root,shortcut):raise ValueError('脚本备份目标不匹配')
-    rows=m['files']
-    if len(rows)!=2:raise ValueError('脚本备份清单损坏')
+    rows=manifest_rows(m)
     # The installed shortcut is authoritative when an uploaded /root file already differs.
     index=1 if rows[1].get('exists') else 0;row=rows[index]
     if row.get('file')!=str(index)+'.sh' or not row.get('exists'):raise ValueError('此备份没有可恢复的管理脚本')
@@ -210,10 +217,14 @@ def rollback_stage(state,backup,root,shortcut,destination):
     atomic_bytes(dest/'singbox-manager.sha256',(row['sha256']+'  singbox-manager.sh\n').encode(),0o600)
 
 
-def fetch(state,destination,current_version=''):
+def fetch(state,destination,current_version='',tag=None):
     config=source(state);token_file=pathlib.Path(state)/'github-token';token=''
     api='https://api.github.com/repos/'+config['repository']
     latest=api+'/releases/latest'
+    if tag:
+        if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag):
+            raise ValueError('无效的安装版本')
+        latest=api+'/releases/tags/'+tag
     try:release=request_json(latest)
     except GitHubReadError as error:
         if error.status not in {401,403,404} or not token_file.exists():raise
@@ -222,6 +233,8 @@ def fetch(state,destination,current_version=''):
         token=token_file.read_text().strip()
         if not re.fullmatch(r'[A-Za-z0-9_]{10,255}',token):raise ValueError('GitHub 令牌格式无效')
         release=request_json(latest,token)
+    if tag and release.get('tag_name') != tag:
+        raise ValueError('正式 Release 与本机版本不匹配')
     dest=pathlib.Path(destination)
     origin=download_release(api,dest,('singbox-manager.sh','singbox-manager.sha256'),request_json,
                             asset_bytes,token,current_version,release)
@@ -230,8 +243,40 @@ def fetch(state,destination,current_version=''):
     return report
 
 
+def check_update(state, stage, current, root, shortcut):
+    report = fetch(state, stage)
+    print(f"当前管理器：v{current}；最新签名正式版：{report['tag']}")
+    local, latest = version_tuple(current), version_tuple(report['version'])
+    print('可升级' if latest > local else '当前已是最新版本' if latest == local else '本机版本高于最新正式版')
+    digests = []
+    for name in targets(root, shortcut):
+        path = pathlib.Path(name)
+        digest = file_digest(regular(path)) if path.exists() or path.is_symlink() else None
+        digests.append(digest)
+        print(f"{name}：{digest or '缺失'}")
+    print('两个安装副本摘要一致' if digests[0] and digests[0] == digests[1] else '两个安装副本缺失或摘要不一致')
+
+
+def repair_shortcut(state, stage, current, root, shortcut):
+    original = regular(pathlib.Path(root) / 'singbox-manager.sh').read_bytes()
+    if static_script_info(original)['version'] != current:
+        raise ValueError('安装版本不一致，请使用菜单 30')
+    target = pathlib.Path(shortcut)
+    if target.exists() or target.is_symlink():
+        if static_script_info(regular(target).read_bytes())['version'] != current:
+            raise ValueError('快捷命令版本不同，请使用菜单 30')
+    report = fetch(state, stage, tag='v' + current)
+    if hashlib.sha256(original).hexdigest() != report['sha256']:
+        raise ValueError('安装副本与该版本签名摘要不符，请使用菜单 30')
+    if not target.exists() or target.read_bytes() != original or target.stat().st_mode & 0o777 != 0o700:
+        atomic_bytes(target, original)
+    print('快捷命令已与签名发布副本核对一致。')
+
+
 def command(args):
     op=args[0]
+    if op=='check':return check_update(*args[1:])
+    if op=='shortcut':return repair_shortcut(*args[1:])
     if op=='verify':print(json.dumps(verify(*args[1:]),ensure_ascii=False));return
     if op=='check-version':return check_version(*args[1:])
     if op=='install':print(json.dumps(install(*args[1:]),ensure_ascii=False));return
