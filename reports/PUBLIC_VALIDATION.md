@@ -2,6 +2,12 @@
 
 原始日志、真实地址、SSH 端口、主机名、节点域名、登录资料及备份位置仅保存在私有目录；以下只发布能力与结果。
 
+## v3.6.9
+
+420 项本地测试通过，含 SSH 回执及待恢复标记回归。Bash 语法、ShellCheck 和分发摘要通过。练手服务器验收单独记录。
+
+All 420 local tests passed, including SSH installation receipts and pending recovery during inspection. Bash syntax, ShellCheck and distribution checksum checks passed. Practice-server verification is recorded separately.
+
 ## v3.6.8 — 2026-11-18
 
 macOS 与练手 Debian 各通过 418 项测试，含 8 项新回归；Bash 语法、ShellCheck、分发摘要通过。完整备份在远端与本地校验。隔离安装、备份校验分支、签名更新检查、同版本快捷命令修复通过，隔离前后已有节点 HTTPS 请求 12/12 成功，原服务进程和受保护文件一致。正式部署与匿名读回另见本版 Release 正文。

@@ -307,3 +307,9 @@ If the older entry reports `File or stream is not seekable` after signature veri
 ## v3.6.8
 
 Enter `v` in menu 19 to verify all completed backups. Legacy backups without hashes are reported separately. Menu **30 → 5** or `sbm self-update check` shows the signed stable release and both installed file digests. Menu 25 verifies the installed copy against its matching signed release online before repairing the shortcut. Use menu 30 for version changes. SSH uploads are verified and confirmed by the installed manager.
+
+### Unreleased: SSH consent and inspection with pending work
+
+The SSH helper verifies the candidate locally and displays its version and digest. Entering `yes` authorizes upload and passes that single confirmation to the installed remote manager. The helper distinguishes a completed installation from already-identical scripts using the installer receipt and verifies both destination files. Cancellation or EOF ends the operation before upload. A remote error or an ambiguous receipt returns failure and leaves uploaded files available for inspection.
+
+An explicit `sbm self-update check`, or **19 → v** or **30 → 5** in an open menu, reports pending configuration or manager recovery and stops. Starting the manager without arguments retains startup recovery. Normal menu actions still use locks, temporary files and audit records.

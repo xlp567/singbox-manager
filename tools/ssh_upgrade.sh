@@ -46,13 +46,50 @@ from sbm.core.release_trust import verify_directory
 release=pathlib.Path(sys.argv[1]);verify_directory(release)
 if (release/'singbox-manager.sh').read_bytes()!=pathlib.Path(sys.argv[2]).read_bytes():raise SystemExit('本地管理器与签名发布包不一致，未执行远端候选脚本')
 PY_SIGN
+printf '已验证待上传的签名管理器 v%s，SHA-256：%s\n' "$version" "$expected"
+while true; do
+    printf '%s' '确认上传并安装此版本（yes / no）: ' >&2
+    if ! IFS= read -r answer; then printf '%s\n' '输入结束，已取消。'; exit 0; fi
+    case $answer in
+        [Yy]|[Yy][Ee][Ss]) break;;
+        ''|[Nn]|[Nn][Oo]|/cancel) printf '%s\n' '已取消。'; exit 0;;
+        *) printf '%s\n' '请输入 yes 或 no。' >&2;;
+    esac
+done
 scp "${options[@]}" -P "$port" "$PROJECT/singbox-manager.sh" "$target:$candidate"
 scp "${options[@]}" -P "$port" "$PROJECT/singbox-manager.sha256" "$target:$checksum"
 scp "${options[@]}" -P "$port" "$release/SHA256SUMS" "$target:$manifest"
 scp "${options[@]}" -P "$port" "$release/SHA256SUMS.sig" "$target:$signature"
-# Nonce is generated locally and consists only of hexadecimal characters.
-ssh "${options[@]}" -tt -p "$port" "$target" "/usr/local/bin/sbm self-update local $candidate"
-actual=$(ssh "${options[@]}" -n -p "$port" "$target" 'sha256sum /usr/local/bin/sbm' | awk '{print $1}')
-[[ $actual == "$expected" ]] || { printf '%s\n' '未安装所上传版本（可能已取消）；保留候选文件供核查。' >&2; exit 1; }
+# Bind the local consent to the uploaded bytes. The installed verifier still
+# checks the signature, version and pending state before applying the update.
+ssh "${options[@]}" -n -p "$port" "$target" "echo '$expected  $candidate' | sha256sum -c -"
+ssh "${options[@]}" -T -p "$port" "$target" "/usr/local/bin/sbm self-update local $candidate" <<<yes | tee "$session/result"
+outcome=$(python3 - "$session/result" "$version" "$expected" <<'PY_RESULT'
+import json
+import pathlib
+import sys
+
+receipts = []
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    try:
+        row = json.loads(line)
+    except ValueError:
+        continue
+    if isinstance(row, dict) and 'changed' in row:
+        receipts.append(row)
+if len(receipts) != 1:
+    raise SystemExit('没有唯一的安装回执，无法确认结果；已保留上传文件。')
+row = receipts[0]
+if (type(row['changed']) is not bool or row.get('sha256') != sys.argv[3]
+        or row.get('version') != sys.argv[2]):
+    raise SystemExit('安装回执与已确认版本或摘要不符；已保留上传文件。')
+print('installed' if row['changed'] else 'identical')
+PY_RESULT
+)
+ssh "${options[@]}" -n -p "$port" "$target" "echo '$expected  /root/singbox-manager.sh' | sha256sum -c - && echo '$expected  /usr/local/bin/sbm' | sha256sum -c -"
 ssh "${options[@]}" -n -p "$port" "$target" "rm -f -- $candidate $checksum $manifest $signature"
-printf '%s\n' 'SSH 上传与管理脚本升级成功；远端摘要一致。'
+if [[ $outcome == identical ]]; then
+    printf '%s\n' '已确认，两个已安装脚本的内容已一致。'
+else
+    printf '%s\n' 'SSH 上传与管理脚本升级成功；两个安装副本均通过摘要核对。'
+fi

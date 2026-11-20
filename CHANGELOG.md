@@ -1,5 +1,11 @@
 # Changelog / 更新记录
 
+## v3.6.9
+
+SSH 上传前在本机确认。取消、完成安装和副本已一致分别显示结果。安装后核对远端回执与两个脚本摘要。菜单 19 的仅校验、菜单 30 的检查更新及 `sbm self-update check` 在检查入口遇到待恢复事务时提示并退出，普通启动保留自动恢复。
+
+The SSH helper requests consent before upload, distinguishes cancellation, installation and identical copies, and verifies the installation receipt and both installed digests. Backup verification and manager update checks report pending transactions at the inspection entry point and exit. Normal startup retains automatic recovery.
+
 ## v3.6.8
 
 菜单 19 输入 `v` 仅校验全部已完成备份。旧格式无摘要会单独标出。菜单 **30 → 5** 或 `sbm self-update check` 显示已签名的最新正式版和两个已安装副本的摘要。菜单 25 从对应版本的正式 Release 核验本机安装副本后修复快捷命令，需要联网。版本不一致请用菜单 30。SSH 上传升级由服务器上已安装的 sbm 验签和确认。 恢复前核对每条清单记录与目标文件的对应关系。

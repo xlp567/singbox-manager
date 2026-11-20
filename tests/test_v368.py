@@ -136,16 +136,107 @@ restore_action
         (tools/'ssh').write_text("""#!/usr/bin/env bash
 arg=${!#}
 printf '%s\\n' "$arg" >> "$COMMAND_LOG"
-if [[ $arg == 'sha256sum /usr/local/bin/sbm' ]]; then cat "$DIGEST_FILE"; fi
+if [[ $arg == *"/sbm self-update"* ]]; then
+    read -r answer && [[ $answer == yes ]] || exit 12
+    printf '%s\\n' "$REMOTE_RECEIPT"
+    exit "$REMOTE_STATUS"
+fi
+if [[ $arg == *'/usr/local/bin/sbm'* && $arg == *'sha256sum -c'* ]]; then exit "$DIGEST_STATUS"; fi
 """)
-        (tools/'scp').write_text('#!/bin/sh\nexit 0\n')
+        (tools/'scp').write_text('#!/bin/sh\necho upload >> "$COMMAND_LOG"\n')
         for name in ('ssh', 'scp'):
             (tools/name).chmod(0o700)
         log = self.root/'commands'
-        env = dict(os.environ, PATH=str(tools)+os.pathsep+os.environ['PATH'],
-                   COMMAND_LOG=str(log), DIGEST_FILE=str(stage/'singbox-manager.sha256'))
-        result = subprocess.run(['bash',str(helper),'root@example.com'],env=env,capture_output=True)
-        self.assertEqual(result.returncode,0,result.stderr)
-        commands = [line for line in log.read_text().splitlines() if 'self-update' in line]
-        self.assertEqual(len(commands),1)
-        self.assertRegex(commands[0],r'^/usr/local/bin/sbm self-update local /root/singbox-manager-upload-[0-9a-f]+\.sh$')
+        import hashlib
+        digest = hashlib.sha256(self.original.read_bytes()).hexdigest()
+        receipt = dict(version=self.version, sha256=digest, changed=True)
+        cases = [
+            ('no\n', receipt, 0, 0, True, '已取消'),
+            ('', receipt, 0, 0, True, '输入结束，已取消'),
+            ('wrong\nYES\n', receipt, 0, 0, True, '升级成功'),
+            ('yes\n', dict(receipt, changed=False), 0, 0, True, '已确认，两个已安装脚本的内容已一致'),
+            ('yes\n', {}, 0, 0, False, '没有唯一的安装回执'),
+            ('yes\n', dict(receipt, sha256='wrong'), 0, 0, False, '安装回执与已确认版本'),
+            ('yes\n', receipt, 22, 0, False, ''),
+            ('yes\n', receipt, 0, 23, False, ''),
+        ]
+        for answer, row, remote_code, hash_code, success, message in cases:
+            with self.subTest(answer=answer, receipt=row, status=(remote_code,hash_code)):
+                log.write_text('')
+                env = dict(os.environ, PATH=str(tools)+os.pathsep+os.environ['PATH'],
+                           COMMAND_LOG=str(log), REMOTE_RECEIPT=json.dumps(row),
+                           REMOTE_STATUS=str(remote_code), DIGEST_STATUS=str(hash_code))
+                result = subprocess.run(['bash',str(helper),'root@example.com'],env=env,
+                                        input=answer,text=True,capture_output=True)
+                self.assertEqual(result.returncode==0,success,result.stderr)
+                self.assertIn(message,result.stdout+result.stderr)
+                calls=log.read_text().splitlines()
+                commands = [line for line in calls if 'self-update' in line]
+                if answer in ('no\n',''):
+                    self.assertFalse(commands)
+                    self.assertNotIn('upload',calls)
+                else:
+                    self.assertEqual(len(commands),1)
+                    self.assertRegex(commands[0],r'^/usr/local/bin/sbm self-update local /root/singbox-manager-upload-[0-9a-f]+\.sh$')
+                if not success or answer in ('no\n',''):
+                    self.assertNotIn('升级成功',result.stdout)
+
+    def test_inspection_with_pending_state_stops_before_recovery_or_download(self):
+        shell = r"""
+source "$1"
+STATE=$2
+shift 2
+require_host() { :; }
+engine() { echo "unexpected engine call $*" >&2; exit 44; }
+setup_tmp() { TMP=$STATE; }
+audit_record() { :; }
+cleanup() { :; }
+BACKUPS=$STATE/backups
+"$@"
+"""
+        protected = {self.original: self.original.read_bytes(), self.shortcut: b'existing shortcut'}
+        self.shortcut.write_bytes(protected[self.shortcut])
+        entries = [('main','self-update','check'), ('action','19'), ('action','30'),
+                   ('main','self-update','menu')]
+        for name in ('pending','manager-update-pending.json'):
+            marker=self.root/name
+            marker.write_text('preserve pending data')
+            for entry in entries:
+                with self.subTest(marker=name, entry=entry):
+                    res=subprocess.run(['bash','-c',shell,'_',str(ROOT/'singbox-manager.sh'),
+                                        str(self.root),*entry],input=('v\n' if '19' in entry else '5\n'),text=True,capture_output=True)
+                    self.assertEqual(res.returncode,1,res.stderr)
+                    self.assertIn('恢复',res.stderr)
+                    self.assertNotIn('unexpected',res.stderr)
+                    self.assertEqual(marker.read_text(),'preserve pending data')
+                    for path, content in protected.items():
+                        self.assertEqual(path.read_bytes(), content)
+            marker.unlink()
+
+    def test_startup_and_mutating_submenu_keep_recovery(self):
+        # Exercise the real dispatcher; intercept the recovery command before it
+        # can access any host paths. Exit 76 tells the caller to reload sbm.
+        (self.root/'manager-update-pending.json').write_text('pending')
+        shell = r"""
+source "$1"
+STATE=$2
+shift 2
+require_host() { :; }
+recover_pending() { echo CONFIG_RECOVERY_PREFLIGHT; }
+setup_tmp() { TMP=$STATE; }
+cleanup() { :; }
+audit_record() { :; }
+engine() {
+    if [[ $1 == manager-update && $2 == recover ]]; then echo MANAGER_RECOVERY; return; fi
+    echo unexpected >&2; exit 44
+}
+main "$@"
+"""
+        for args, user_input, expected_code in [((),'',0), (('self-update','menu'),'2\n',76)]:
+            with self.subTest(args=args):
+                result=subprocess.run(['bash','-c',shell,'_',str(ROOT/'singbox-manager.sh'),
+                                       str(self.root),*args],input=user_input,text=True,capture_output=True)
+                self.assertEqual(result.returncode,expected_code,result.stderr)
+                self.assertIn('MANAGER_RECOVERY',result.stdout)
+                if not args:
+                    self.assertIn('CONFIG_RECOVERY_PREFLIGHT',result.stdout)

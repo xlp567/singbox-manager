@@ -12,8 +12,13 @@ manager_update_action() {
         say '0  返回'
         menu_read_choice choice '升级方式: ' '^[0-5]$' || return 0
         case $choice in 1) mode=local;; 2) mode=github;; 3) mode=rollback;; 4) mode=configure;; 5) mode=check;; 0) menu_back; return 0;; *) die '升级方式无效。';; esac
+        if [[ $mode != check ]]; then recover_manager_if_pending; fi
     fi
-    if [[ $mode == check ]]; then engine manager-update check "$STATE" "$TMP" "$SBM_VERSION" /root "$SHORTCUT"; return; fi
+    if [[ $mode == check ]]; then
+        require_inspection_ready
+        engine manager-update check "$STATE" "$TMP" "$SBM_VERSION" /root "$SHORTCUT"
+        return
+    fi
     if [[ $mode == configure ]]; then engine manager-update configure "$STATE"; return; fi
     if [[ $mode == rollback ]]; then
         engine manager-update list "$STATE"

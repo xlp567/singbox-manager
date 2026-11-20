@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# singbox-manager v3.6.8 - transactional core and independent protocol adapters
+# singbox-manager v3.6.9 - transactional core and independent protocol adapters
 # Single-file distribution: Bash service/transaction layer + bundled modular Python config engine.
 # Official APT provides the base service; verified official release binaries are staged
 # independently so changing runtime versions can be rolled back without downgrading dpkg.
@@ -15,7 +15,7 @@ DROP=/etc/systemd/system/sing-box.service.d/90-singbox-manager.conf
 EXPORTS=$STATE/exports
 DATA=/var/lib/sing-box
 # Not VERSION: sourcing /etc/os-release in require_host would overwrite it.
-SBM_VERSION=3.6.8
+SBM_VERSION=3.6.9
 SHORTCUT=/usr/local/bin/sbm
 # Used by service.sh bundled below; tests redirect them.
 # shellcheck disable=SC2034
@@ -492,8 +492,13 @@ manager_update_action() {
         say '0  返回'
         menu_read_choice choice '升级方式: ' '^[0-5]$' || return 0
         case $choice in 1) mode=local;; 2) mode=github;; 3) mode=rollback;; 4) mode=configure;; 5) mode=check;; 0) menu_back; return 0;; *) die '升级方式无效。';; esac
+        if [[ $mode != check ]]; then recover_manager_if_pending; fi
     fi
-    if [[ $mode == check ]]; then engine manager-update check "$STATE" "$TMP" "$SBM_VERSION" /root "$SHORTCUT"; return; fi
+    if [[ $mode == check ]]; then
+        require_inspection_ready
+        engine manager-update check "$STATE" "$TMP" "$SBM_VERSION" /root "$SHORTCUT"
+        return
+    fi
     if [[ $mode == configure ]]; then engine manager-update configure "$STATE"; return; fi
     if [[ $mode == rollback ]]; then
         engine manager-update list "$STATE"
@@ -948,6 +953,7 @@ change_version() {
 }
 verify_snapshots() {
     local dir count=0 failed=0
+    require_inspection_ready
     for dir in "$BACKUPS"/*; do
         [[ -d $dir && ! -L $dir && -f $dir/.complete ]] || continue
         count=$((count+1))
@@ -977,6 +983,7 @@ restore_action() {
         if [[ $n =~ ^[1-9][0-9]{0,5}$ ]] && (( n<=${#dirs[@]} )); then break; fi
         say '无效序号，请重新输入。'
     done
+    recover_manager_if_pending
     chosen=${dirs[n-1]}
     checker=$chosen/runtime.bin
     engine backup-verify "$chosen"
@@ -1123,21 +1130,38 @@ singbox-manager v$SBM_VERSION
   help        显示本帮助
 USAGE
 }
-action() (
-    set -Eeuo pipefail
-    # Consumed by cleanup() in the bundled transactions.sh module.
-    # shellcheck disable=SC2034
-    MENU_RETURN_REQUESTED=0 MENU_CANCELLED=0 MENU_RELOAD=0
-    trap cleanup EXIT
-    trap 'exit 130' INT
-    trap 'exit 143' TERM
-    setup_tmp
-    ACTION_ID=$1
+# A selected inspection must never implicitly complete a previous transaction.
+require_inspection_ready() {
+    local marker
+    for marker in "$STATE/pending" "$STATE/manager-update-pending.json"; do
+        if [[ -e $marker || -L $marker ]]; then
+            die '存在待恢复事务，本次仅检查已停止。请不带参数运行 sbm 处理恢复后重试。'
+        fi
+    done
+}
+recover_manager_if_pending() {
     if [[ -f $STATE/manager-update-pending.json ]]; then
         engine manager-update recover "$STATE" /root "$SHORTCUT"
         say '管理脚本中断恢复已完成，请重新运行 sbm。'
         exit 76
     fi
+}
+action() (
+    set -Eeuo pipefail
+    # Consumed by cleanup() in the bundled transactions.sh module.
+    # shellcheck disable=SC2034
+    MENU_RETURN_REQUESTED=0 MENU_CANCELLED=0 MENU_RELOAD=0
+    if [[ $1 == self-update && ${2:-menu} == check ]]; then require_inspection_ready; fi
+    trap cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    setup_tmp
+    ACTION_ID=$1
+    # For mixed menus the selected operation decides whether recovery is allowed.
+    case "$1:${2:-menu}" in
+        19:*|30:*|self-update:menu|self-update:check) ;;
+        *) recover_manager_if_pending;;
+    esac
     if [[ $1 != audit ]]; then audit_record action-start started; fi
     case $1 in
         1) initialize;;
@@ -1238,6 +1262,9 @@ main() {
             menu|github|rollback|configure|check) (( $#<=2 )) || die '脚本升级参数过多。';;
             *) die '脚本升级方式无效。';;
         esac
+        # Avoid setup/cleanup writes when an explicitly read-only request is
+        # already blocked. action() repeats the check with the manager lock.
+        if [[ ${2:-menu} == check ]]; then require_inspection_ready; fi
         require_host cli
         [[ ! -f $STATE/pending ]] || die '存在未完成配置事务；请先恢复。'
         action self-update "${2:-menu}" "${3:-}"
