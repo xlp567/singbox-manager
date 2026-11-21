@@ -1,6 +1,6 @@
 # 已知问题与限制 / Known issues and limits
 
-核对版本：v3.6.7。此清单区分未修复行为、待复现疑点与使用限制；测试通过不代表问题清零。公开记录不包含测试环境标识。
+核对版本：v3.6.8。此清单区分未修复行为、待复现疑点与使用限制；测试通过不代表问题清零。公开记录不包含测试环境标识。
 
 | 状态 | 未完成项及影响 |
 |---|---|
@@ -14,6 +14,8 @@
 | 使用限制 | v3.6.3 起每个 UDP 会话只能发往首包通过检查的一个目的地，依赖全锥形 NAT 的应用可能无法连接。已应用旧规则的服务器须执行 **31 → 1** 才获得该修复。该修复经 SOCKS 与 Shadowsocks 入站实测；Hysteria2、TUIC 及 TLS 协议的 UDP 使用同一条路由规则，尚未逐一实测。 |
 | 工具边界 | 隐私规则不能识别任意未知账号、少见域名或内部名称；正式发布必须结合非空私有精确匹配清单与人工复核。完整历史 / Release 下载审计尚未接入自动 CI。 |
 
+v3.6.8 的备份校验只检查有清单的已完成备份；旧格式没有摘要时会单独标记为无法验证，不能当作通过。摘要一致不等于已做恢复演练。菜单 **30 → 5** 仅检查正式版和已安装文件摘要，不安装更新；菜单 25 仅修复同版本快捷命令，且需要联网核验对应的正式 Release。需要更换版本时使用菜单 30。验证范围见 [公开验证摘要](../reports/PUBLIC_VALIDATION.md) 和 [v3.6.8 发布说明](https://github.com/xlp567/singbox-manager/releases/tag/v3.6.8)。
+
 v3.6.7 修复了一键入口和独立安装器在真实终端确认时的 `File or stream is not seekable`；签名验证与安装确认仍然保留。此次新增安装验证使用 Debian 练手机上的独立挂载命名空间，未连接报告问题的新 Ubuntu 主机，不能等同于该主机已安装验收。
 
 本机公网地址快照只在应用配置时刷新；地址改变后需要重新应用。私网 / 回环 / 链路本地拒绝仍有效。当前策略拒绝 NAT64、6to4、Teredo 等转换前缀，相关网络可能受影响。
@@ -26,7 +28,9 @@ v3.6.0 已修复：BBR 原设置恢复、APT 公钥指纹固定、审计日志�
 
 ## English
 
-Reviewed for v3.6.1. The four boundary defects found in v3.6.0 are fixed: audit rotation races, missing retained segments reported as pruning, lost BBR recovery records/false success, and acceptance of multicast addresses. Usage limits: BBR is host-wide while enabled (v3.6.0 restores recorded settings; hosts enabled by older versions fall back to cubic); a rotated SagerNet APT key is refused until verified and pinned in a manager update; only the newest 20 audit segments are retained; hosts without reachable detection sources or interface public addresses need `sbm security public-ip add`.
+Reviewed for v3.6.8. The four boundary defects found in v3.6.0 are fixed: audit rotation races, missing retained segments reported as pruning, lost BBR recovery records/false success, and acceptance of multicast addresses. Usage limits: BBR is host-wide while enabled (v3.6.0 restores recorded settings; hosts enabled by older versions fall back to cubic); a rotated SagerNet APT key is refused until verified and pinned in a manager update; only the newest 20 audit segments are retained; hosts without reachable detection sources or interface public addresses need `sbm security public-ip add`.
+
+In v3.6.8, backup verification checks completed backups with manifests. Legacy backups without digests are reported as unverifiable, not as passing. Matching digests do not replace a restore rehearsal. Menu **30 → 5** checks the stable release and installed file digests without installing an update. Menu 25 only repairs the same-version shortcut and requires online verification against the matching official release. Use menu 30 to change versions. See the [public validation summary](../reports/PUBLIC_VALIDATION.md) and [v3.6.8 release notes](https://github.com/xlp567/singbox-manager/releases/tag/v3.6.8) for validation scope.
 
 Legacy audit gaps cannot be retrospectively proven as retention; they are explicitly reported as unverified. Older managers cannot parse format 4 rotation headers, and rollback does not convert the logs. All concurrent writers must honor the stable lock; mixed old independent backends are not protected. Appends check only the current segment; `sbm audit` checks retained history. Missing records require matching backup material; repair cannot recreate them. Repair evidence is retained outside automatic cleanup and uses disk space. BBR recovery keeps the saved record on failure but cannot force a kernel to accept settings; menu 27 offers retries. See [guide section 17](USER_GUIDE.en.md#17-v361-boundary-fixes-and-recovery). BBR kernel changes use a sysctl double; v3.6.6 live navigation/manager-upgrade validation is recorded in the public validation summary. Signing and publication verification are recorded in the Release notes.
 
